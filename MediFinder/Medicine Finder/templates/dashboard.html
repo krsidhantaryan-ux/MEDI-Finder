@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shop Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; }
+        .navbar-custom { background: white; box-shadow: 0 2px 15px rgba(0,0,0,0.05); }
+        .hover-card { transition: all 0.3s ease; border-radius: 15px; border: none; background: white; box-shadow: 0 5px 15px rgba(0,0,0,0.03); }
+        .hover-card:hover { box-shadow: 0 15px 30px rgba(0,0,0,0.08); }
+        .slide-up { animation: slideUp 0.6s ease-out; }
+        .btn-custom { border-radius: 8px; font-weight: 500; transition: all 0.2s; }
+        .map-wrapper { border-radius: 10px; overflow: hidden; border: 2px solid #eee; }
+        .form-control { border-radius: 8px; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-custom py-3 mb-4 slide-up">
+    <div class="container">
+        <a class="navbar-brand fw-bold text-primary" href="#"><i class="bi bi-shop-window"></i> {% if shop and shop.name %}{{ shop.name }}{% else %}New Shop{% endif %}</a>
+        <div class="d-flex align-items-center">
+            {% if shop and shop.status == 'Verified' %}
+                <span class="badge bg-success me-3 py-2 px-3"><i class="bi bi-patch-check-fill"></i> Account Verified</span>
+            {% elif shop and shop.status == 'Rejected' %}
+                <span class="badge bg-danger me-3 py-2 px-3"><i class="bi bi-x-octagon-fill"></i> Account Rejected</span>
+            {% else %}
+                <span class="badge bg-warning text-dark me-3 py-2 px-3"><i class="bi bi-hourglass-split"></i> Pending Admin Approval</span>
+            {% endif %}
+
+            <a href="/" class="btn btn-outline-primary btn-sm btn-custom me-2"><i class="bi bi-search"></i> Test Search</a>
+            <a href="/logout" class="btn btn-danger btn-sm btn-custom"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container slide-up">
+    {% if shop and shop.status == 'Pending' %}
+    <div class="alert alert-warning text-center py-3 mb-4 shadow-sm border-0 rounded-3">
+        <i class="bi bi-exclamation-triangle-fill fs-5 me-2"></i>
+        <strong>Verification Pending:</strong> Your uploaded documents are currently under review by our admin team. Your shop will not appear in customer searches until approved.
+    </div>
+    {% elif shop and shop.status == 'Rejected' %}
+    <div class="alert alert-danger text-center py-3 mb-4 shadow-sm border-0 rounded-3">
+        <i class="bi bi-x-circle-fill fs-5 me-2"></i>
+        <strong>Verification Rejected:</strong> Your account documents did not pass verification. Please contact support or re-register with valid documents.
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-12 mb-4">
+            <div class="card hover-card p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-geo-alt-fill text-danger"></i> Pinpoint Your Location</h5>
+                    <small class="text-muted">Click the map to auto-fill your city.</small>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-8 mb-3 mb-md-0">
+                        <div class="input-group mb-3 shadow-sm rounded">
+                            <input type="text" id="address-search" class="form-control border-0 bg-light" placeholder="Search for your area (e.g. Danapur)">
+                            <button class="btn btn-primary px-4" type="button" onclick="geocodeAddress()"><i class="bi bi-search"></i> Find</button>
+                        </div>
+                        <div id="admin-map" class="map-wrapper" style="height: 350px; width: 100%;"></div>
+                    </div>
+                    <div class="col-md-4 d-flex flex-column justify-content-center bg-light p-4 rounded-3">
+                        <form action="/update_location" method="POST">
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-bold">Store City</label>
+                                <input type="text" name="city" id="city" class="form-control border-0 shadow-sm" value="{% if shop and shop.city %}{{ shop.city }}{% endif %}" placeholder="e.g. Patna" required>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <label class="form-label text-muted small fw-bold">Latitude</label>
+                                    <input type="text" name="lat" id="lat" class="form-control border-0 shadow-sm text-muted" value="{% if shop and shop.lat %}{{ shop.lat }}{% endif %}" readonly>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-muted small fw-bold">Longitude</label>
+                                    <input type="text" name="lng" id="lng" class="form-control border-0 shadow-sm text-muted" value="{% if shop and shop.lng %}{{ shop.lng }}{% endif %}" readonly>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-warning btn-custom w-100 py-2 fw-bold shadow-sm"><i class="bi bi-save"></i> Save Location Profile</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card hover-card p-4 h-100">
+                <h5 class="fw-bold mb-3"><i class="bi bi-plus-circle-fill text-success"></i> Add Medicine</h5>
+                <form method="POST">
+                    <div class="form-floating mb-3">
+                        <input type="text" name="med_name" class="form-control bg-light border-0" id="medName" placeholder="e.g. Paracetamol" required>
+                        <label for="medName" class="text-muted">Medicine Name</label>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-custom w-100 py-2"><i class="bi bi-plus-lg"></i> Add to Stock</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="col-md-8 mb-4">
+            <div class="card hover-card p-0 h-100 overflow-hidden">
+                <div class="p-4 border-bottom bg-white">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-box-seam-fill text-primary"></i> Current Inventory</h5>
+                </div>
+                <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                    {% for item in items %} 
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="fw-medium">{{ item.med_name }}</span>
+                            <span class="badge bg-success rounded-pill ms-2 px-2 py-1"><i class="bi bi-check2"></i> In Stock</span>
+                        </div>
+                        <form action="/delete_medicine/{{ item.id }}" method="POST" class="m-0" onsubmit="return confirm('Remove {{ item.med_name }} from stock?');">
+                            <button type="submit" class="btn btn-outline-danger btn-sm rounded-circle d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;" title="Remove from inventory">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div> 
+                    {% else %}
+                    <div class="p-5 text-center text-muted">
+                        <i class="bi bi-inbox fs-1"></i>
+                        <p class="mt-2">No medicines added yet. Start adding stock!</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var startLat = {% if shop and shop.lat %}{{ shop.lat }}{% else %}25.5941{% endif %};
+    var startLng = {% if shop and shop.lng %}{{ shop.lng }}{% else %}85.1376{% endif %};
+    
+    var map = L.map('admin-map').setView([startLat, startLng], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    var marker = L.marker([startLat, startLng], {draggable: true}).addTo(map);
+
+    function getCityFromCoords(lat, lng) {
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.address) {
+                var city = data.address.city || data.address.town || data.address.village || data.address.county || data.address.state_district || "";
+                document.getElementById('city').value = city;
+            }
+        });
+    }
+
+    marker.on('dragend', function(e) {
+        var position = marker.getLatLng();
+        document.getElementById('lat').value = position.lat.toFixed(6);
+        document.getElementById('lng').value = position.lng.toFixed(6);
+        getCityFromCoords(position.lat, position.lng);
+    });
+
+    map.on('click', function(e) {
+        marker.setLatLng(e.latlng);
+        document.getElementById('lat').value = e.latlng.lat.toFixed(6);
+        document.getElementById('lng').value = e.latlng.lng.toFixed(6);
+        getCityFromCoords(e.latlng.lat, e.latlng.lng);
+    });
+
+    function geocodeAddress() {
+        var address = document.getElementById('address-search').value;
+        if (!address) return;
+        fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(address))
+        .then(response => response.json())
+        .then(data => {
+            if (data.length > 0) {
+                var newLat = parseFloat(data[0].lat);
+                var newLng = parseFloat(data[0].lon);
+                map.setView([newLat, newLng], 14);
+                marker.setLatLng([newLat, newLng]);
+                document.getElementById('lat').value = newLat.toFixed(6);
+                document.getElementById('lng').value = newLng.toFixed(6);
+                getCityFromCoords(newLat, newLng); 
+            } else { alert("Location not found."); }
+        });
+    }
+</script>
+</body>
+</html>
