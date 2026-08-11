@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register Pharmacy - MedFinder</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="ambient-bg d-flex align-items-center justify-content-center py-5">
+
+<div class="container d-flex justify-content-center position-relative" style="z-index: 2;">
+    <div class="card glass-card register-card p-4 p-md-5">
+        <div class="d-flex justify-content-end mb-2">
+            <button class="btn btn-sm glass-card px-2 py-1 rounded-circle" onclick="toggleTheme()" title="Toggle Theme">
+                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
+            </button>
+        </div>
+        <div class="text-center mb-4">
+            <div class="bg-success text-white d-inline-flex align-items-center justify-content-center rounded-circle mb-3 shadow" style="width: 60px; height: 60px;">
+                <i class="bi bi-clipboard-plus fs-3"></i>
+            </div>
+            <h3 class="fw-bold text-dark">Register Your Pharmacy</h3>
+            <p class="text-muted small">Get verified to list real-time medicine inventory to nearby customers</p>
+        </div>
+
+        {% if error %}
+            <div class="alert alert-danger rounded-3 py-2 small shadow-sm"><i class="bi bi-exclamation-triangle me-1"></i> {{ error }}</div>
+        {% endif %}
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Shop Name *</label>
+                    <input type="text" name="name" class="form-control glass-input rounded-3" placeholder="e.g. City Medico" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Account Password *</label>
+                    <input type="password" name="password" class="form-control glass-input rounded-3" placeholder="Create Password" required>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-bold">Drug License Number *</label>
+                    <input type="text" name="license_number" class="form-control glass-input rounded-3" placeholder="e.g. DL-12345678" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">License Image *</label>
+                    <input type="file" name="license_image" class="form-control glass-input rounded-3" accept="image/*" required>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small fw-bold">Shop Front Photo *</label>
+                    <input type="file" name="shop_photo" class="form-control glass-input rounded-3" accept="image/*" required>
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-bold">GST Certificate (Optional)</label>
+                    <input type="file" name="gst_certificate" class="form-control glass-input rounded-3" accept="image/*,.pdf">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-success w-100 py-2.5 rounded-pill fw-semibold shadow-sm mt-4">
+                Submit Registration <i class="bi bi-check-circle ms-1"></i>
+            </button>
+        </form>
+
+        <div class="text-center mt-3 pt-3 border-top">
+            <small class="text-muted">Already registered? <a href="/login" class="text-primary fw-semibold text-decoration-none">Sign In</a></small>
+            <div class="mt-2"><a href="/" class="small text-secondary text-decoration-none"><i class="bi bi-house me-1"></i>Back to Home</a></div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>
