@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - MedFinder</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="ambient-bg pb-5">
+
+<nav class="navbar navbar-expand-lg glass-nav sticky-top mb-4">
+    <div class="container">
+        <span class="navbar-brand fw-bold text-dark"><i class="bi bi-shield-lock-fill text-primary me-2"></i>Admin Verification Dashboard</span>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-sm glass-card px-3 rounded-pill me-2" onclick="toggleTheme()" title="Toggle Theme">
+                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
+            </button>
+            <a href="/" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-house"></i> Public Site</a>
+            <a href="/admin/logout" class="btn btn-danger btn-sm rounded-pill"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- PENDING APPROVALS -->
+    <div class="card glass-card p-4 mb-4">
+        <h5 class="fw-bold text-warning mb-3"><i class="bi bi-clock-history me-2"></i>Pending Verification Requests</h5>
+        <div class="table-responsive">
+            <table class="table table-glass align-middle">
+                <thead>
+                    <tr>
+                        <th>Shop Name</th>
+                        <th>License #</th>
+                        <th>Documents</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shop in pending %}
+                    <tr>
+                        <td class="fw-bold">{{ shop.name }}</td>
+                        <td><code>{{ shop.license_number or 'N/A' }}</code></td>
+                        <td>
+                            {% if shop.license_image %}
+                                <a href="/uploads/{{ shop.license_image }}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill me-1"><i class="bi bi-file-image"></i> License</a>
+                            {% endif %}
+                            {% if shop.shop_photo %}
+                                <a href="/uploads/{{ shop.shop_photo }}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill me-1"><i class="bi bi-shop"></i> Photo</a>
+                            {% endif %}
+                            {% if shop.gst_certificate %}
+                                <a href="/uploads/{{ shop.gst_certificate }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-file-earmark-pdf"></i> GST</a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="/approve/{{ shop.id }}" class="btn btn-success btn-sm rounded-pill px-3 me-1"><i class="bi bi-check-lg"></i> Approve</a>
+                            <a href="/reject/{{ shop.id }}" class="btn btn-danger btn-sm rounded-pill px-3"><i class="bi bi-x-lg"></i> Reject</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">No pending store verifications.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- VERIFIED SHOPS -->
+    <div class="card glass-card p-4 mb-4">
+        <h5 class="fw-bold text-success mb-3"><i class="bi bi-patch-check-fill me-2"></i>Verified Pharmacies</h5>
+        <div class="table-responsive">
+            <table class="table table-glass align-middle">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Shop Name</th>
+                        <th>City</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shop in verified %}
+                    <tr>
+                        <td>#{{ shop.id }}</td>
+                        <td class="fw-bold">{{ shop.name }}</td>
+                        <td>{{ shop.city or 'Not set' }}</td>
+                        <td><span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-circle me-1"></i> Verified</span></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-3 text-muted">No verified pharmacies yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- REJECTED SHOPS -->
+    <div class="card glass-card p-4">
+        <h5 class="fw-bold text-danger mb-3"><i class="bi bi-x-circle-fill me-2"></i>Rejected Requests</h5>
+        <div class="table-responsive">
+            <table class="table table-glass align-middle">
+                <thead>
+                    <tr>
+                        <th>Shop Name</th>
+                        <th>License #</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shop in rejected %}
+                    <tr>
+                        <td class="fw-bold">{{ shop.name }}</td>
+                        <td><code>{{ shop.license_number or 'N/A' }}</code></td>
+                        <td><span class="badge bg-danger rounded-pill px-3 py-2">Rejected</span></td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center py-3 text-muted">No rejected requests.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+</body>
+</html>
