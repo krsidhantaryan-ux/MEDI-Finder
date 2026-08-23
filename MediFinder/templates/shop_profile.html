@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% set page_map = true %}
+{% block title %}{{ shop.name }} — MediFinder{% endblock %}
+
+{% block content %}
+<section class="section-tight" style="padding-top:1.5rem">
+<div class="container">
+    <a href="{{ url_for('search_page') }}" class="small text-muted"><i class="bi bi-arrow-left"></i> Back to search</a>
+
+    <div class="card card-flush mt-3">
+        <div style="height:200px;background:linear-gradient(135deg,var(--teal-800),var(--teal-900));position:relative;overflow:hidden">
+            {% if shop.shop_photo %}
+            <img src="{{ url_for('serve_upload', filename=shop.shop_photo) }}" alt="{{ shop.name }}" style="width:100%;height:100%;object-fit:cover;opacity:.9">
+            {% endif %}
+        </div>
+        <div class="card-body" style="padding:1.5rem 2rem 2rem">
+            <div class="flex between" style="flex-wrap:wrap;gap:1rem;align-items:flex-start">
+                <div>
+                    <div class="flex gap-2 center" style="flex-wrap:wrap">
+                        <h1 class="mb-0" style="font-size:1.9rem">{{ shop.name }}</h1>
+                        {% if shop.status == 'Verified' %}
+                        <span class="badge badge-teal"><i class="bi bi-patch-check-fill"></i> Verified</span>
+                        {% endif %}
+                        {% if is_open %}<span class="badge badge-green"><span class="open-dot"></span> Open now</span>
+                        {% else %}<span class="badge badge-red"><span class="open-dot closed"></span> Closed</span>{% endif %}
+                    </div>
+                    <p class="text-muted mt-2 mb-2">
+                        <i class="bi bi-geo-alt"></i> {{ shop.address or shop.city }}{% if shop.city %}, {{ shop.city }}{% endif %}
+                        {% if shop.pincode %} {{ shop.pincode }}{% endif %}
+                        {% if shop.state %} · {{ shop.state }}{% endif %}
+                    </p>
+                    <div class="flex gap-3 center" style="flex-wrap:wrap;font-size:.9rem">
+                        <span class="stars">
+                            {% for i in range(5) %}{% if i < (rating.avg|round(0,'ceil')) %}★{% else %}☆{% endif %}{% endfor %}
+                        </span>
+                        <span class="text-muted">{{ rating.avg }} ({{ rating.count }} review{{ '' if rating.count==1 else 's' }})</span>
+                        {% if shop.is_open_24h %}<span class="tag"><i class="bi bi-clock"></i> Open 24 hours</span>{% endif %}
+                        {% if shop.delivery %}<span class="tag tag-stock"><i class="bi bi-truck"></i> Home delivery</span>{% endif %}
+                        {% if shop.phone %}<span class="tag"><i class="bi bi-telephone"></i> {{ shop.phone }}</span>{% endif %}
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-outline" id="favShop"><i class="bi bi-bookmark"></i> Save</button>
+                    <a href="https://www.google.com/maps/dir/?api=1&destination={{ shop.lat }},{{ shop.lng }}" target="_blank" class="btn btn-primary"><i class="bi bi-sign-turn-right"></i> Directions</a>
+                </div>
+            </div>
+
+            {% if shop.description %}
+            <p class="mt-3" style="color:var(--ink-700);max-width:720px">{{ shop.description }}</p>
+            {% endif %}
+            {% if not shop.is_open_24h %}
+            <p class="small text-muted mb-0"><i class="bi bi-clock-history"></i> Hours: {{ shop.open_time }} – {{ shop.close_time }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row mt-4" style="gap:1.5rem">
+        <div style="flex:2 1 380px">
+            <div class="flex between center mb-3" style="flex-wrap:wrap;gap:.75rem">
+                <h2 class="mb-0" style="font-size:1.35rem">Inventory <span class="text-muted small">({{ inventory|length }})</span></h2>
+                <input type="search" id="invSearch" class="form-control" style="max-width:280px" placeholder="Filter this shop's stock...">
+            </div>
+            <div id="invList">
+                {% for item in inventory %}
+                <div class="med-card inv-item" data-name="{{ (item.med_name ~ ' ' ~ item.salt_composition)|lower }}">
+                    <div class="med-top">
+                        <div>
+                            <div class="med-name">{{ item.med_name }}</div>
+                            <div class="med-salt">{{ item.salt_composition or '' }} {{ '· ' ~ item.dosage if item.dosage }}</div>
+                        </div>
+                        <div class="med-price">{{ "₹%.2f"|format(item.price or 0) }}</div>
+                    </div>
+                    <div class="med-meta">
+                        {% if item.prescription %}<span class="tag tag-rx"><i class="bi bi-file-earmark-medical"></i> Rx</span>
+                        {% else %}<span class="tag tag-otc"><i class="bi bi-bag-check"></i> OTC</span>{% endif %}
+                        {% if item.stock_quantity > 0 %}<span class="tag tag-stock"><i class="bi bi-check2-circle"></i> {{ item.stock_quantity }} in stock</span>
+                        {% else %}<span class="tag tag-out"><i class="bi bi-x-circle"></i> Out of stock</span>{% endif %}
+                        {% if item.category_name %}<span class="tag"><i class="bi bi-tag"></i> {{ item.category_name }}</span>{% endif %}
+                        {% if item.manufacturer %}<span class="tag"><i class="bi bi-building"></i> {{ item.manufacturer }}</span>{% endif %}
+                    </div>
+                    <div class="flex between center mt-3" style="gap:.75rem">
+                        <button class="btn btn-ghost btn-sm" data-fav="{{ item.med_name }}" data-salt="{{ item.salt_composition or '' }}">
+                            <i class="bi bi-bookmark"></i> Save medicine
+                        </button>
+                        <button class="btn btn-primary btn-sm" {{ 'disabled' if item.stock_quantity<=0 }}
+                                onclick="MF.openReserve({{ item.id }}, '{{ item.med_name|e }}', '{{ shop.name|e }}')">
+                            <i class="bi bi-bag-check"></i> Hold for 2 hours
+                        </button>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty"><i class="bi bi-box-seam"></i> This pharmacy hasn't listed any inventory yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div style="flex:1 1 280px">
+            <div class="map-wrap" style="position:relative;top:0;height:300px;margin-bottom:1.5rem">
+                <div id="profile-map"></div>
+            </div>
+
+            <div class="card">
+                <h3 style="font-size:1.1rem"><i class="bi bi-star text-amber"></i> Reviews</h3>
+                {% if current_customer %}
+                <form id="reviewForm" class="mt-2">
+                    <div class="flex gap-2 center mb-2" id="starRate" style="font-size:1.4rem;cursor:pointer;color:var(--ink-200)">
+                        {% for i in range(1,6) %}<span data-v="{{ i }}">★</span>{% endfor %}
+                    </div>
+                    <textarea name="comment" class="form-control mb-2" rows="2" placeholder="Share your experience..."></textarea>
+                    <button class="btn btn-primary btn-sm btn-block"><i class="bi bi-send"></i> Post review</button>
+                </form>
+                {% else %}
+                <p class="small text-muted"><a href="{{ url_for('customer_login') }}">Sign in</a> to leave a review.</p>
+                {% endif %}
+                <div class="mt-3" id="reviewList">
+                    {% for rv in reviews %}
+                    <div class="review">
+                        <div class="review-head">
+                            <strong>{{ rv.customer_name or 'Customer' }}</strong>
+                            <small class="text-muted">{{ rv.created_at[:10] if rv.created_at else '' }}</small>
+                        </div>
+                        <div class="stars small">{{ '★'*rv.rating }}{{ '☆'*(5-rv.rating) }}</div>
+                        {% if rv.comment %}<p>{{ rv.comment }}</p>{% endif %}
+                    </div>
+                    {% else %}
+                    <p class="small text-muted">No reviews yet — be the first.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    const shop = {{ {"id":shop.id,"name":shop.name,"lat":shop.lat,"lng":shop.lng,"city":shop.city}|tojson }};
+    const map = L.map("profile-map").setView([shop.lat||25.61, shop.lng||85.14], 15);
+    MF.addTileLayer(map);
+    L.marker([shop.lat||25.61, shop.lng||85.14], { icon: MF.makeIcon() }).addTo(map).bindPopup(`<strong>${shop.name}</strong>`).openPopup();
+
+    // Inventory filter
+    document.getElementById("invSearch").addEventListener("input", e=>{
+        const q = e.target.value.toLowerCase();
+        document.querySelectorAll(".inv-item").forEach(el=>{
+            el.style.display = el.dataset.name.includes(q) ? "" : "none";
+        });
+    });
+
+    // Favourite buttons
+    document.querySelectorAll("[data-fav]").forEach(b=>{
+        b.addEventListener("click", ()=> MF.toggleFavourite(b.dataset.fav, b.dataset.salt, b));
+    });
+
+    // Reviews
+    let rating = 0;
+    const stars = document.querySelectorAll("#starRate span");
+    stars.forEach(s=>{
+        s.addEventListener("mouseenter", ()=> paint(+s.dataset.v));
+        s.addEventListener("mouseleave", ()=> paint(rating));
+        s.addEventListener("click", ()=>{ rating = +s.dataset.v; paint(rating); });
+    });
+    function paint(n){ stars.forEach(s=>s.style.color = +s.dataset.v<=n ? "var(--amber-500)":"var(--ink-200)"); }
+
+    const form = document.getElementById("reviewForm");
+    if(form) form.addEventListener("submit", async e=>{
+        e.preventDefault();
+        if(!rating){ MF.toast("Pick a star rating","warning"); return; }
+        const comment = form.querySelector("textarea").value;
+        const r = await fetch(`/api/shops/${shop.id}/review`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ rating, comment })
+        });
+        const j = await r.json();
+        if(j.ok){
+            MF.toast("Thanks for your review!","success");
+            location.reload();
+        } else MF.toast(j.error||"Could not post","error");
+    });
+})();
+</script>
+{% endblock %}
