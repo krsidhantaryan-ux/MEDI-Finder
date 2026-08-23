@@ -141,6 +141,63 @@ MediFinder/
 
 ---
 
+## Deployment
+
+The repo is deployment-ready out of the box:
+- `gunicorn` is in `requirements.txt`
+- a `Procfile` (used by Railway/Heroku/Dokku/Render Docker-style)
+- a `render.yaml` Blueprint for one-click Render deploys
+- `DATABASE_PATH`, `UPLOAD_FOLDER` and `SECRET_KEY` can be set via env vars
+
+### One-click deploy to Render
+
+Click the button below (or open
+`render.com/deploy?repo=https://github.com/krsidhantaryan-ux/MEDI-Finder`) and
+follow the prompts:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/krsidhantaryan-ux/MEDI-Finder)
+
+Settings (auto-filled by `render.yaml`):
+
+| Setting | Value |
+|---|---|
+| Root directory | `MediFinder` |
+| Build command | `pip install -r requirements.txt` |
+| Start command | `gunicorn app:app --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT` |
+| Health check | `/` |
+
+After the first deploy, set the `ADMIN_PASS` environment variable in the
+Render dashboard (Environment section) to something other than the default,
+then redeploy.
+
+**Free-tier caveat:** the SQLite DB and uploaded files live on the ephemeral
+filesystem, so they reset to seed data on each deploy/restart. To keep data,
+upgrade to a paid instance and attach a persistent disk mounted at a path of
+your choice, then set `DATABASE_PATH` and `UPLOAD_FOLDER` to point at it.
+
+### Railway / Heroku / Dokku
+
+The `Procfile` works as-is. Just set the env vars below.
+
+### PythonAnywhere
+
+1. Clone the repo from GitHub into a PythonAnywhere web app.
+2. `pip install --user -r MediFinder/requirements.txt`
+3. Point the WSGI file at `MediFinder/app.py`'s `app` object.
+4. Reload.
+
+### Environment variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `SECRET_KEY` | Flask session signing | dev-only key — **set in production** |
+| `ADMIN_USER` | Admin login username | `admin` |
+| `ADMIN_PASS` | Admin login password | `admin123` |
+| `DATABASE_PATH` | Absolute path to SQLite file | `MediFinder/medifinder.db` |
+| `UPLOAD_FOLDER` | Absolute path for uploads | `MediFinder/static/uploads` |
+| `FLASK_ENV` | Set to `production` to force secure cookies | unset |
+| `PORT` | Port to bind (set by the host) | `5000` |
+
 ## Notes
 
 - The 2-hour hold is enforced by a `held_until` timestamp; expired holds are

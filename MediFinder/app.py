@@ -31,13 +31,23 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "medfinder-local-dev-key-change-me"),
-    DATABASE=os.path.join(BASE_DIR, "medifinder.db"),
-    UPLOAD_FOLDER=os.path.join(BASE_DIR, "static", "uploads"),
+    DATABASE=os.environ.get(
+        "DATABASE_PATH",
+        os.path.join(BASE_DIR, "medifinder.db"),
+    ),
+    UPLOAD_FOLDER=os.environ.get(
+        "UPLOAD_FOLDER",
+        os.path.join(BASE_DIR, "static", "uploads"),
+    ),
     MAX_CONTENT_LENGTH=8 * 1024 * 1024,  # 8 MB
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
+# Secure cookies when served behind HTTPS (production)
+if os.environ.get("FLASK_ENV") == "production" or os.environ.get("RENDER"):
+    app.config.update(SESSION_COOKIE_SECURE=True, PREFERRED_URL_SCHEME="https")
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+os.makedirs(os.path.dirname(app.config["DATABASE"]) or ".", exist_ok=True)
 
 ALLOWED_IMG = {"png", "jpg", "jpeg", "gif", "webp"}
 ALLOWED_DOC = ALLOWED_IMG | {"pdf"}
