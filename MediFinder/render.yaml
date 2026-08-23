@@ -1,0 +1,29 @@
+# Render Blueprint — one-click deploy at
+# https://render.com/deploy?repo=https://github.com/krsidhantaryan-ux/MEDI-Finder
+#
+# Free tier notes:
+#  - The SQLite database lives on the ephemeral filesystem, so it resets to
+#    the seed data on every deploy / restart. For persistent data, upgrade to
+#    a paid plan and attach a persistent disk (or switch to a managed DB).
+#  - The free instance spins down after ~15 min of inactivity; the next
+#    request takes ~30-50 s to wake it up.
+services:
+  - type: web
+    name: medifinder
+    runtime: python
+    rootDir: MediFinder
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USER
+        value: admin
+      - key: ADMIN_PASS
+        sync: false          # set this in the Render dashboard after first deploy

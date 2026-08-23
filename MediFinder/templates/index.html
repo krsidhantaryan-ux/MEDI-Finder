@@ -1,94 +1,232 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MedFinder - Modern Pharmacy & Medicine Locator</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="ambient-bg">
+{% extends "base.html" %}
+{% set page_map = false %}
+{% block title %}MediFinder — Real-time medicine availability at verified pharmacies{% endblock %}
 
-<nav class="navbar navbar-expand-lg glass-nav sticky-top shadow-sm">
+{% block content %}
+<!-- ===================== HERO ===================== -->
+<section class="hero">
     <div class="container">
-        <a class="navbar-brand fw-bold fs-4 text-primary" href="/"><i class="bi bi-capsule-pill me-2"></i>MedFinder</a>
-        <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-sm glass-card px-3 rounded-pill" onclick="toggleTheme()" title="Toggle Theme">
-                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
-            </button>
-            <a href="/login" class="btn btn-outline-primary btn-sm px-3 rounded-pill"><i class="bi bi-shop me-1"></i> Pharmacy Portal</a>
-            <a href="/admin" class="btn btn-primary text-white btn-sm px-3 rounded-pill fw-semibold"><i class="bi bi-shield-lock me-1"></i> Admin</a>
-        </div>
-    </div>
-</nav>
+        <div class="hero-grid">
+            <div class="fade-up">
+                <span class="eyebrow"><i class="bi bi-shield-check"></i> Verified pharmacies only</span>
+                <h1 class="mt-3">Stop calling ten shops.<br><span class="accent">Find it nearby.</span></h1>
+                <p class="hero-lead">
+                    Search by brand or active ingredient. MediFinder shows real-time stock,
+                    honest pricing and distance across licensed pharmacies — then holds it for you.
+                </p>
 
-<div class="hero-wrapper text-center text-white mb-4">
-    <div class="container position-relative" style="z-index: 2;">
-        <h1 class="display-5 fw-bold mb-2">Find Local Medicine Inventory Real-Time</h1>
-        <p class="lead opacity-90 mb-4">Search by medicine brand name or generic salt composition with live store availability.</p>
-        
-        <div class="card p-3 glass-card mx-auto text-dark" style="max-width: 850px; border-radius: 20px;">
-            <form id="search-form" class="row g-2">
-                <div class="col-md-5">
-                    <div class="input-group">
-                        <span class="input-group-text border-end-0 rounded-start-pill"><i class="bi bi-search text-primary"></i></span>
-                        <input type="text" id="query-input" class="form-control glass-input border-start-0 rounded-end-pill ps-0" placeholder="Brand or Salt (e.g., Paracetamol)" required>
+                <form class="searchbar" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search">
+                    <div class="field">
+                        <i class="bi bi-search"></i>
+                        <input type="text" name="q" id="heroQuery" placeholder="Search medicine or salt — e.g. Paracetamol, Azithromycin"
+                               autocomplete="off" aria-label="Search medicine">
+                        <div class="suggest" id="suggestBox"></div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <span class="input-group-text border-end-0 rounded-start-pill"><i class="bi bi-geo-alt text-danger"></i></span>
-                        <input type="text" id="city-input" class="form-control glass-input border-start-0 ps-0" placeholder="City / Area">
-                        <button type="button" class="btn btn-outline-secondary glass-input rounded-end-pill px-3" onclick="detectUserLocation()" title="Auto-detect my location">
-                            <i class="bi bi-crosshair text-primary"></i>
+                    <div class="field" style="border-left:1px solid var(--line)">
+                        <i class="bi bi-geo-alt"></i>
+                        <input type="text" name="city" id="heroCity" placeholder="Your city or area" aria-label="City">
+                        <button type="button" class="loc-btn" id="locateBtn" title="Use my location">
+                            <i class="bi bi-crosshair"></i> Locate
                         </button>
                     </div>
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100 rounded-pill fw-semibold shadow-sm"><i class="bi bi-compass me-1"></i> Search Nearby</button>
-                </div>
-            </form>
-        </div>
-    </div>
+                    <button class="btn btn-primary btn-search" type="submit">
+                        <i class="bi bi-compass"></i> Search
+                    </button>
+                </form>
 
-    <div class="hero-waves">
-        <svg viewBox="0 0 1200 120" preserveAspectRatio="none">
-            <path class="shape-fill wave-path-2" d="M0,0 C150,90 350,-40 500,40 C650,120 900,20 1200,60 L1200,120 L0,120 Z"></path>
-            <path class="shape-fill wave-path-1" d="M0,0 C300,90 600,-40 800,50 C1000,120 1100,20 1200,40 L1200,120 L0,120 Z"></path>
-        </svg>
-    </div>
-</div>
-
-<div class="container mb-5">
-    <div class="row g-4">
-        <div class="col-lg-5">
-            <div class="card border-0 shadow-sm rounded-4 h-100 glass-card">
-                <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-list-stars me-2"></i>Search Results</h5>
-                    <span id="results-count" class="badge bg-primary rounded-pill px-3 py-2">0 found</span>
+                <div class="chips mt-3" id="trendingChips">
+                    <span class="text-muted small" style="align-self:center;margin-right:.25rem"><i class="bi bi-fire text-amber"></i> Trending:</span>
+                    {% for t in trending %}
+                    <button type="button" class="chip" data-q="{{ t.med_name }}">{{ t.med_name }}</button>
+                    {% endfor %}
                 </div>
-                <div class="card-body px-4">
-                    <div id="results-container" class="list-group list-group-flush overflow-auto" style="max-height: 550px;">
-                        <div class="text-center py-5 text-muted">
-                            <i class="bi bi-search fs-1 text-primary opacity-50"></i>
-                            <p class="mt-2">Enter a medicine brand or salt composition above to perform a live search.</p>
-                        </div>
+
+                <div class="hero-meta">
+                    <div><i class="bi bi-clock-history"></i> 2-hour holds</div>
+                    <div><i class="bi bi-cash-stack"></i> Price comparison</div>
+                    <div><i class="bi bi-geo"></i> Distance sorting</div>
+                    <div><i class="bi bi-shield-exclamation"></i> Rx/OTC labels</div>
+                </div>
+            </div>
+
+            <div class="hero-visual fade-up">
+                <img src="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&w=1200&q=70"
+                     alt="Pharmacist organising medicines" loading="eager"
+                     onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#104a44,#0a3430)'">
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    <div>
+                        <strong id="liveCount">{{ shops|length }} pharmacies live</strong>
+                        <small>Verified &amp; currently listing inventory</small>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+</section>
 
-        <div class="col-lg-7">
-            <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 glass-card">
-                <div id="map" style="height: 600px; width: 100%;"></div>
+<!-- ===================== STATS ===================== -->
+<section class="section-tight" style="padding-top:2rem">
+    <div class="container">
+        <div class="stat-row">
+            <div class="stat"><div class="num">{{ shops|length }}+</div><div class="lbl">Verified pharmacies</div></div>
+            <div class="stat"><div class="num">{{ categories|length }}</div><div class="lbl">Medicine categories</div></div>
+            <div class="stat"><div class="num">2 hrs</div><div class="lbl">Reservation hold window</div></div>
+            <div class="stat"><div class="num">100%</div><div class="lbl">Licensed &amp; reviewed</div></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== FEATURES ===================== -->
+<section class="section" id="features">
+    <div class="container">
+        <div class="text-center" style="max-width:640px;margin:0 auto 2.5rem">
+            <span class="eyebrow eyebrow-amber">How it works</span>
+            <h2 class="mt-3">Built for the moment you need medicine now</h2>
+            <p class="text-muted">Three steps from symptom to shelf. No accounts required to search — sign in only to hold favourites and track reservations.</p>
+        </div>
+
+        <div class="feature-grid stagger">
+            <div class="card card-hover feature">
+                <div class="ico"><i class="bi bi-search-heart"></i></div>
+                <h3>Search by name or salt</h3>
+                <p>Type a brand (Dolo 650) or the active ingredient (Paracetamol). We match across every verified pharmacy's live inventory.</p>
+            </div>
+            <div class="card card-hover feature">
+                <div class="ico"><i class="bi bi-map"></i></div>
+                <h3>See distance &amp; price</h3>
+                <p>Results are sorted nearest-first with live pricing, stock counts, discounts and open/closed status on a map.</p>
+            </div>
+            <div class="card card-hover feature">
+                <div class="ico"><i class="bi bi-bag-check"></i></div>
+                <h3>Hold in two taps</h3>
+                <p>Reserve with your phone. The pharmacy keeps it aside for two hours — no upfront payment, no out-of-stock surprises.</p>
             </div>
         </div>
     </div>
-</div>
+</section>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="/static/js/main.js"></script>
-</body>
-</html>
+<!-- ===================== CATEGORIES ===================== -->
+<section class="section" style="background:var(--paper-2); border-block:1px solid var(--line)">
+    <div class="container">
+        <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+            <div>
+                <span class="eyebrow">Browse</span>
+                <h2 class="mt-2 mb-0">Shop by category</h2>
+            </div>
+            <a href="{{ url_for('search_page') }}" class="btn btn-outline"><i class="bi bi-grid"></i> View all inventory</a>
+        </div>
+        <div class="chips" style="gap:.7rem">
+            {% for c in categories %}
+            <a class="chip" href="{{ url_for('search_page', cat=c.id) }}" style="padding:.7rem 1rem">
+                <i class="bi {{ c.icon }} text-teal"></i> {{ c.name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- ===================== FOR PHARMACIES ===================== -->
+<section class="section" id="about">
+    <div class="container">
+        <div class="card" style="padding:0; overflow:hidden; display:grid; grid-template-columns:1.1fr .9fr; border-radius:var(--radius-xl)">
+            <div style="padding:3rem; background:var(--teal-900); color:#eaf3f1">
+                <span class="eyebrow" style="background:rgba(255,255,255,.08); color:var(--amber-400); border-color:rgba(255,255,255,.15)">For pharmacists</span>
+                <h2 class="mt-3" style="color:#fff">Run a smarter counter.</h2>
+                <p style="color:rgba(255,255,255,.78); max-width:440px">
+                    List your inventory in minutes, manage stock from one dashboard, accept 2-hour
+                    holds from nearby customers and get found by patients searching for what you stock.
+                </p>
+                <ul class="auth-points" style="margin:1.5rem 0">
+                    <li><i class="bi bi-check-circle-fill"></i> Real-time inventory with expiry &amp; batch tracking</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Reservation workflow: confirm → collect → complete</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Store profile with hours, location, delivery and photos</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Dashboard analytics: stock value, expiring items, demand</li>
+                </ul>
+                <div class="flex gap-2" style="flex-wrap:wrap">
+                    <a href="{{ url_for('shop_register') }}" class="btn btn-amber btn-lg"><i class="bi bi-shop"></i> Register your pharmacy</a>
+                    <a href="{{ url_for('shop_login') }}" class="btn btn-lg" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.3)">Pharmacy sign in</a>
+                </div>
+            </div>
+            <div style="padding:3rem; display:flex; flex-direction:column; justify-content:center; gap:1rem">
+                <div class="flex gap-3 center">
+                    <div class="ico" style="width:44px;height:44px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;font-size:1.2rem;flex:none"><i class="bi bi-patch-check"></i></div>
+                    <div><strong>Verified network</strong><div class="text-muted small">Every pharmacy submits a drug license, reviewed by our team.</div></div>
+                </div>
+                <div class="flex gap-3 center">
+                    <div class="ico" style="width:44px;height:44px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;font-size:1.2rem;flex:none"><i class="bi bi-cash-coin"></i></div>
+                    <div><strong>Transparent pricing</strong><div class="text-muted small">See MRP and selling price side by side. No hidden markups.</div></div>
+                </div>
+                <div class="flex gap-3 center">
+                    <div class="ico" style="width:44px;height:44px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;font-size:1.2rem;flex:none"><i class="bi bi-star"></i></div>
+                    <div><strong>Community reviews</strong><div class="text-muted small">Patients rate pharmacies so great service gets noticed.</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===================== CTA ===================== -->
+<section class="section-tight">
+    <div class="container text-center" style="max-width:680px">
+        <h2>Need something tonight?</h2>
+        <p class="text-muted">Search now — no account needed. Sign up to track reservations and save your regular medicines.</p>
+        <div class="flex gap-2 center" style="justify-content:center;flex-wrap:wrap;margin-top:1rem">
+            <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-lg"><i class="bi bi-search"></i> Find medicine now</a>
+            <a href="{{ url_for('customer_register') }}" class="btn btn-outline btn-lg"><i class="bi bi-person-plus"></i> Create account</a>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Hero search: autocomplete, locate, trending chips
+(function(){
+    const form = document.getElementById("heroSearch");
+    const q = document.getElementById("heroQuery");
+    const city = document.getElementById("heroCity");
+    const box = document.getElementById("suggestBox");
+    let idx = -1, items = [];
+
+    q.addEventListener("input", async () => {
+        const term = q.value.trim();
+        if (term.length < 2) { box.classList.remove("open"); return; }
+        try {
+            const r = await fetch(`/api/autocomplete?q=${encodeURIComponent(term)}`);
+            items = await r.json();
+        } catch { items = []; }
+        if (!items.length) { box.classList.remove("open"); return; }
+        box.innerHTML = items.map((it,i)=>`
+            <div class="suggest-item" data-i="${i}">
+                <span><strong>${it.med_name}</strong> <small>${it.salt_composition||""}</small></span>
+                <i class="bi bi-arrow-return-left text-muted"></i>
+            </div>`).join("");
+        box.classList.add("open");
+        box.querySelectorAll(".suggest-item").forEach(el=>{
+            el.addEventListener("mousedown", ()=>{ q.value = items[+el.dataset.i].med_name; box.classList.remove("open"); form.requestSubmit();});
+        });
+    });
+    q.addEventListener("blur", ()=> setTimeout(()=>box.classList.remove("open"), 150));
+
+    document.getElementById("locateBtn").addEventListener("click", async (e)=>{
+        e.preventDefault();
+        const btn = e.currentTarget;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Locating...';
+        try {
+            const pos = await MF.getUserLocation();
+            const c = await MF.reverseGeocode(pos.lat, pos.lng);
+            if (c) city.value = c;
+            MF.toast("Location detected — results sorted nearest first", "success");
+        } catch {
+            MF.toast("Couldn't access location. Type your city instead.", "warning");
+        } finally { btn.innerHTML = '<i class="bi bi-crosshair"></i> Locate'; }
+    });
+
+    document.getElementById("trendingChips").addEventListener("click", e=>{
+        const c = e.target.closest(".chip");
+        if (c) { q.value = c.dataset.q; form.requestSubmit(); }
+    });
+})();
+</script>
+{% endblock %}

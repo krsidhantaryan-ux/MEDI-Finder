@@ -1,133 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Admin Dashboard - MedFinder</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body class="ambient-bg pb-5">
+{% extends "base.html" %}
+{% block title %}Admin dashboard — MediFinder{% endblock %}
 
-<nav class="navbar navbar-expand-lg glass-nav sticky-top mb-4">
-    <div class="container">
-        <span class="navbar-brand fw-bold text-dark"><i class="bi bi-shield-lock-fill text-primary me-2"></i>Admin Verification Dashboard</span>
-        <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-sm glass-card px-3 rounded-pill me-2" onclick="toggleTheme()" title="Toggle Theme">
-                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
-            </button>
-            <a href="/" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-house"></i> Public Site</a>
-            <a href="/admin/logout" class="btn btn-danger btn-sm rounded-pill"><i class="bi bi-box-arrow-right"></i> Logout</a>
-        </div>
-    </div>
-</nav>
-
+{% block content %}
+<section class="section-tight" style="padding-top:1.5rem">
 <div class="container">
-    <!-- PENDING APPROVALS -->
-    <div class="card glass-card p-4 mb-4">
-        <h5 class="fw-bold text-warning mb-3"><i class="bi bi-clock-history me-2"></i>Pending Verification Requests</h5>
-        <div class="table-responsive">
-            <table class="table table-glass align-middle">
-                <thead>
-                    <tr>
-                        <th>Shop Name</th>
-                        <th>License #</th>
-                        <th>Documents</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for shop in pending %}
-                    <tr>
-                        <td class="fw-bold">{{ shop.name }}</td>
-                        <td><code>{{ shop.license_number or 'N/A' }}</code></td>
-                        <td>
-                            {% if shop.license_image %}
-                                <a href="/uploads/{{ shop.license_image }}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill me-1"><i class="bi bi-file-image"></i> License</a>
-                            {% endif %}
-                            {% if shop.shop_photo %}
-                                <a href="/uploads/{{ shop.shop_photo }}" target="_blank" class="btn btn-sm btn-outline-info rounded-pill me-1"><i class="bi bi-shop"></i> Photo</a>
-                            {% endif %}
-                            {% if shop.gst_certificate %}
-                                <a href="/uploads/{{ shop.gst_certificate }}" target="_blank" class="btn btn-sm btn-outline-secondary rounded-pill"><i class="bi bi-file-earmark-pdf"></i> GST</a>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <a href="/approve/{{ shop.id }}" class="btn btn-success btn-sm rounded-pill px-3 me-1"><i class="bi bi-check-lg"></i> Approve</a>
-                            <a href="/reject/{{ shop.id }}" class="btn btn-danger btn-sm rounded-pill px-3"><i class="bi bi-x-lg"></i> Reject</a>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="4" class="text-center py-4 text-muted">No pending store verifications.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+        <div>
+            <span class="eyebrow"><i class="bi bi-shield-lock"></i> Admin console</span>
+            <h1 class="mt-2 mb-0" style="font-size:1.7rem">Network overview</h1>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('index') }}" class="btn btn-outline btn-sm"><i class="bi bi-house"></i> Public site</a>
+            <a href="{{ url_for('admin_logout') }}" class="btn btn-danger btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
         </div>
     </div>
 
-    <!-- VERIFIED SHOPS -->
-    <div class="card glass-card p-4 mb-4">
-        <h5 class="fw-bold text-success mb-3"><i class="bi bi-patch-check-fill me-2"></i>Verified Pharmacies</h5>
-        <div class="table-responsive">
-            <table class="table table-glass align-middle">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Shop Name</th>
-                        <th>City</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for shop in verified %}
-                    <tr>
-                        <td>#{{ shop.id }}</td>
-                        <td class="fw-bold">{{ shop.name }}</td>
-                        <td>{{ shop.city or 'Not set' }}</td>
-                        <td><span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-circle me-1"></i> Verified</span></td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="4" class="text-center py-3 text-muted">No verified pharmacies yet.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <div class="dash-stats">
+        <div class="dash-stat"><i class="bi bi-shop ic"></i><div class="v">{{ stats.shops }}</div><div class="l">Total pharmacies</div></div>
+        <div class="dash-stat"><i class="bi bi-patch-check ic" style="color:var(--green-600)"></i><div class="v">{{ stats.verified }}</div><div class="l">Verified</div></div>
+        <div class="dash-stat"><i class="bi bi-hourglass-split ic" style="color:var(--amber-500)"></i><div class="v">{{ stats.pending }}</div><div class="l">Pending review</div></div>
+        <div class="dash-stat"><i class="bi bi-people ic"></i><div class="v">{{ stats.customers }}</div><div class="l">Customers</div></div>
+        <div class="dash-stat"><i class="bi bi-box-seam ic"></i><div class="v">{{ stats.inventory }}</div><div class="l">Inventory items</div></div>
+        <div class="dash-stat"><i class="bi bi-bag-check ic"></i><div class="v">{{ stats.reservations }}</div><div class="l">Reservations</div></div>
+        <div class="dash-stat"><i class="bi bi-star ic"></i><div class="v">{{ stats.reviews }}</div><div class="l">Reviews</div></div>
     </div>
 
-    <!-- REJECTED SHOPS -->
-    <div class="card glass-card p-4">
-        <h5 class="fw-bold text-danger mb-3"><i class="bi bi-x-circle-fill me-2"></i>Rejected Requests</h5>
-        <div class="table-responsive">
-            <table class="table table-glass align-middle">
-                <thead>
-                    <tr>
-                        <th>Shop Name</th>
-                        <th>License #</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for shop in rejected %}
-                    <tr>
-                        <td class="fw-bold">{{ shop.name }}</td>
-                        <td><code>{{ shop.license_number or 'N/A' }}</code></td>
-                        <td><span class="badge bg-danger rounded-pill px-3 py-2">Rejected</span></td>
-                    </tr>
+    <div class="row" style="gap:1.5rem">
+        <!-- Left column -->
+        <div style="flex:2 1 480px;display:flex;flex-direction:column;gap:1.5rem">
+            <!-- Pending -->
+            <div class="card" style="padding:1.5rem">
+                <h2 style="font-size:1.2rem"><i class="bi bi-hourglass-split text-amber"></i> Pending verification ({{ pending|length }})</h2>
+                <div class="table-wrap mt-3">
+                    <table class="tbl">
+                        <thead><tr><th>Pharmacy</th><th>License</th><th>Location</th><th>Documents</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for s in pending %}
+                        <tr>
+                            <td>
+                                <strong>{{ s.name }}</strong>
+                                <div class="small text-muted">{{ s.owner_name or '' }} · {{ s.email or '' }}</div>
+                            </td>
+                            <td><span class="mono small">{{ s.license_number or '—' }}</span></td>
+                            <td class="small">{{ s.city or '—' }}</td>
+                            <td>
+                                <div class="flex gap-2" style="flex-wrap:wrap">
+                                    {% if s.license_image %}<a href="{{ url_for('serve_upload', filename=s.license_image) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-file-image"></i> License</a>{% endif %}
+                                    {% if s.shop_photo %}<a href="{{ url_for('serve_upload', filename=s.shop_photo) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-shop"></i> Photo</a>{% endif %}
+                                    {% if s.gst_certificate %}<a href="{{ url_for('serve_upload', filename=s.gst_certificate) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-file-earmark-pdf"></i> GST</a>{% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="flex gap-2">
+                                    <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='approve') }}">
+                                        <button class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i></button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='reject') }}" onsubmit="this.querySelector('[name=note]').value=prompt('Reason for rejection (optional):')||''">
+                                        <input type="hidden" name="note">
+                                        <button class="btn btn-danger btn-sm"><i class="bi bi-x-lg"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="empty"><i class="bi bi-check2-all"></i> All caught up — no pending verifications.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Verified shops -->
+            <div class="card" style="padding:1.5rem">
+                <h2 style="font-size:1.2rem"><i class="bi bi-patch-check-fill text-success"></i> Verified pharmacies ({{ verified|length }})</h2>
+                <div class="table-wrap mt-3">
+                    <table class="tbl">
+                        <thead><tr><th>ID</th><th>Name</th><th>City</th><th>Contact</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for s in verified %}
+                        <tr>
+                            <td class="mono small">#{{ s.id }}</td>
+                            <td><a href="{{ url_for('shop_profile', shop_id=s.id) }}" target="_blank">{{ s.name }} <i class="bi bi-box-arrow-up-right small"></i></a></td>
+                            <td class="small">{{ s.city or '—' }}</td>
+                            <td class="small">{{ s.phone or s.email or '—' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='suspend') }}" data-confirm="Suspend this pharmacy? It will be hidden from public search." style="display:inline">
+                                    <button class="btn btn-ghost btn-sm text-amber"><i class="bi bi-pause-circle"></i> Suspend</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='delete') }}" data-confirm="PERMANENTLY delete this pharmacy and all its inventory?" style="display:inline">
+                                    <button class="btn btn-ghost btn-sm text-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if rejected %}
+            <div class="card" style="padding:1.5rem">
+                <h2 style="font-size:1.2rem"><i class="bi bi-x-circle-fill text-danger"></i> Rejected / suspended ({{ rejected|length }})</h2>
+                <div class="table-wrap mt-3">
+                    <table class="tbl">
+                        <thead><tr><th>Name</th><th>License</th><th>Note</th><th>Action</th></tr></thead>
+                        <tbody>
+                        {% for s in rejected %}
+                        <tr>
+                            <td><strong>{{ s.name }}</strong><div class="small text-muted">{{ s.city or '' }}</div></td>
+                            <td class="mono small">{{ s.license_number or '—' }}</td>
+                            <td class="small text-muted">{{ s.rejection_note or '—' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='reinstate') }}">
+                                    <button class="btn btn-outline btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reinstate</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right column -->
+        <div style="flex:1 1 280px;display:flex;flex-direction:column;gap:1.5rem">
+            <div class="card" style="padding:1.5rem">
+                <h3 style="font-size:1rem"><i class="bi bi-activity text-teal"></i> Recent reservations</h3>
+                <div class="mt-3" style="display:flex;flex-direction:column;gap:.75rem">
+                    {% for r in recent_reservations %}
+                    <div style="padding-bottom:.75rem;border-bottom:1px solid var(--line)">
+                        <div class="flex between center">
+                            <strong style="font-size:.9rem">{{ r.med_name }}</strong>
+                            {% if r.status == 'Pending' %}<span class="badge badge-amber">Pending</span>
+                            {% elif r.status == 'Confirmed' %}<span class="badge badge-teal">Confirmed</span>
+                            {% elif r.status == 'Collected' %}<span class="badge badge-green">Collected</span>
+                            {% elif r.status == 'Cancelled' %}<span class="badge badge-gray">Cancelled</span>
+                            {% else %}<span class="badge badge-red">Expired</span>{% endif %}
+                        </div>
+                        <div class="small text-muted">{{ r.shop_name }} · {{ r.customer_phone }} · {{ r.created_at[:16] }}</div>
+                    </div>
                     {% else %}
-                    <tr>
-                        <td colspan="3" class="text-center py-3 text-muted">No rejected requests.</td>
-                    </tr>
+                    <p class="small text-muted">No reservations yet.</p>
                     {% endfor %}
-                </tbody>
-            </table>
+                </div>
+            </div>
+
+            <div class="card" style="padding:1.5rem">
+                <h3 style="font-size:1rem"><i class="bi bi-journal-text text-teal"></i> Activity log</h3>
+                <div class="mt-3" style="display:flex;flex-direction:column;gap:.5rem;max-height:320px;overflow-y:auto">
+                    {% for l in logs %}
+                    <div class="small" style="padding-bottom:.5rem;border-bottom:1px dashed var(--line)">
+                        <span class="badge badge-gray">{{ l.actor_type or 'system' }}</span>
+                        <strong>{{ l.action }}</strong>
+                        {% if l.detail %}<div class="text-muted" style="word-break:break-word">{{ l.detail }}</div>{% endif %}
+                        <div class="text-muted" style="font-size:.72rem">{{ l.created_at }}</div>
+                    </div>
+                    {% else %}
+                    <p class="small text-muted">No activity yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
         </div>
     </div>
 </div>
-
-<script src="/static/js/main.js"></script>
-</body>
-</html>
+</section>
+{% endblock %}

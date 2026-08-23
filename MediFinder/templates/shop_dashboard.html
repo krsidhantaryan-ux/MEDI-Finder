@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% set page_map = true %}
+{% block title %}{{ shop.name }} — Dashboard{% endblock %}
+
+{% block content %}
+<section class="section-tight" style="padding-top:1.5rem">
+<div class="container">
+    <!-- Header -->
+    <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+        <div>
+            <div class="flex gap-2 center" style="flex-wrap:wrap">
+                <h1 class="mb-0" style="font-size:1.7rem">{{ shop.name }}</h1>
+                {% if shop.status == 'Verified' %}
+                <span class="badge badge-green"><i class="bi bi-patch-check-fill"></i> Verified</span>
+                {% elif shop.status == 'Rejected' %}
+                <span class="badge badge-red"><i class="bi bi-x-circle-fill"></i> Rejected</span>
+                {% else %}
+                <span class="badge badge-amber"><i class="bi bi-clock-history"></i> Pending verification</span>
+                {% endif %}
+            </div>
+            <p class="text-muted small mb-0 mt-1">
+                <i class="bi bi-geo-alt"></i> {{ shop.city or 'Location not set' }}
+                · <a href="{{ url_for('shop_profile', shop_id=shop.id) }}" target="_blank">View public profile <i class="bi bi-box-arrow-up-right"></i></a>
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{{ url_for('shop_logout') }}" class="btn btn-outline btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        </div>
+    </div>
+
+    {% if shop.status == 'Pending' %}
+    <div class="card mb-4" style="border-left:4px solid var(--amber-500);background:var(--amber-50)">
+        <div class="flex gap-3 center">
+            <i class="bi bi-hourglass-split text-amber" style="font-size:1.5rem"></i>
+            <div>
+                <strong>Your store is awaiting verification.</strong>
+                <div class="small text-muted">You can add inventory now. Your store will appear in public search once our team approves your documents.</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="dash">
+        <!-- Sidebar nav -->
+        <aside class="dash-side">
+            <a href="#overview" class="active"><i class="bi bi-speedometer2"></i> Overview</a>
+            <a href="#inventory"><i class="bi bi-box-seam"></i> Inventory <span class="badge badge-gray" style="margin-left:auto">{{ stats.total_items or 0 }}</span></a>
+            <a href="#reservations"><i class="bi bi-bag-check"></i> Reservations
+                {% if res_stats.pending %}<span class="badge badge-amber" style="margin-left:auto">{{ res_stats.pending }}</span>{% endif %}
+            </a>
+            <a href="#profile"><i class="bi bi-shop-window"></i> Store profile</a>
+            <a href="{{ url_for('shop_profile', shop_id=shop.id) }}" target="_blank"><i class="bi bi-eye"></i> Public page</a>
+        </aside>
+
+        <main>
+            <!-- Stats -->
+            <div class="dash-stats" id="overview">
+                <div class="dash-stat"><i class="bi bi-box-seam ic"></i><div class="v">{{ stats.in_stock or 0 }}</div><div class="l">Items in stock</div></div>
+                <div class="dash-stat"><i class="bi bi-currency-rupee ic"></i><div class="v">{{ "₹%.0f"|format(stats.inventory_value or 0) }}</div><div class="l">Stock value</div></div>
+                <div class="dash-stat"><i class="bi bi-bag-check ic"></i><div class="v">{{ res_stats.total or 0 }}</div><div class="l">Total reservations</div></div>
+                <div class="dash-stat"><i class="bi bi-exclamation-triangle ic" style="color:var(--amber-500)"></i><div class="v">{{ stats.expiring or 0 }}</div><div class="l">Expiring in 30d</div></div>
+            </div>
+
+            <!-- Inventory -->
+            <section id="inventory" class="card mb-4" style="padding:1.5rem">
+                <div class="flex between center" style="flex-wrap:wrap;gap:.75rem;margin-bottom:1rem">
+                    <h2 class="mb-0" style="font-size:1.25rem"><i class="bi bi-box-seam text-teal"></i> Inventory</h2>
+                    <button class="btn btn-primary btn-sm" onclick="document.getElementById('addForm').scrollIntoView({behavior:'smooth'})"><i class="bi bi-plus-lg"></i> Add item</button>
+                </div>
+
+                <div class="table-wrap">
+                    <table class="tbl">
+                        <thead><tr>
+                            <th>Medicine</th><th>Category</th><th>Price</th><th>Stock</th><th>Expiry</th><th style="width:120px">Actions</th>
+                        </tr></thead>
+                        <tbody>
+                        {% for item in inventory %}
+                        <tr data-id="{{ item.id }}" class="{{ '' if item.is_active else 'opacity-50' }}">
+                            <td>
+                                <strong>{{ item.med_name }}</strong>
+                                <div class="small text-muted">{{ item.salt_composition }}{% if item.dosage %} · {{ item.dosage }}{% endif %}</div>
+                                {% if item.prescription %}<span class="tag tag-rx" style="margin-top:.2rem">Rx</span>{% endif %}
+                            </td>
+                            <td><span class="small">{{ item.category_name or '—' }}</span></td>
+                            <td>
+                                <div class="fw-semibold">{{ "₹%.2f"|format(item.price or 0) }}</div>
+                                {% if item.mrp and item.mrp > item.price %}<div class="small text-muted"><s>₹{{ "%.2f"|format(item.mrp) }}</s></div>{% endif %}
+                            </td>
+                            <td>
+                                <div class="flex gap-2 center" style="flex-wrap:nowrap">
+                                    <input type="number" value="{{ item.stock_quantity }}" min="0"
+                                           class="form-control stock-input" style="width:72px;padding:.35rem" data-id="{{ item.id }}">
+                                    {% if item.stock_quantity == 0 %}<span class="badge badge-red">Out</span>
+                                    {% elif item.stock_quantity < 10 %}<span class="badge badge-amber">Low</span>
+                                    {% else %}<span class="badge badge-green">OK</span>{% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if item.expiry_date %}
+                                    <span class="small">{{ item.expiry_date }}</span>
+                                {% else %}<span class="text-muted small">—</span>{% endif %}
+                            </td>
+                            <td>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-ghost btn-sm" title="Edit" data-edit="{{ item.id }}"><i class="bi bi-pencil"></i></button>
+                                    <form method="POST" action="{{ url_for('delete_inventory', item_id=item.id) }}" data-confirm="Remove this item?" style="display:inline">
+                                        <button class="btn btn-ghost btn-sm text-danger" title="Delete"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="empty"><i class="bi bi-box-seam"></i> No inventory yet — add your first medicine below.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Add form -->
+                <form id="addForm" method="POST" action="{{ url_for('add_inventory') }}" class="card mt-4" style="background:var(--ink-50);padding:1.25rem">
+                    <h3 style="font-size:1rem" class="mb-3"><i class="bi bi-plus-circle text-success"></i> Add new medicine</h3>
+                    <div class="row" style="gap:0">
+                        <div style="flex:2 1 220px"><label class="form-label">Brand name *</label><input name="med_name" class="form-control" required placeholder="e.g. Dolo 650"></div>
+                        <div style="flex:2 1 180px"><label class="form-label">Salt composition</label><input name="salt_composition" class="form-control" placeholder="e.g. Paracetamol"></div>
+                        <div style="flex:1 1 160px"><label class="form-label">Category</label>
+                            <select name="category_id" class="form-select">
+                                <option value="">—</option>
+                                {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3" style="gap:0">
+                        <div style="flex:1 1 160px"><label class="form-label">Manufacturer</label><input name="manufacturer" class="form-control"></div>
+                        <div style="flex:1 1 160px"><label class="form-label">Dosage / pack</label><input name="dosage" class="form-control" placeholder="650mg, 15 tabs"></div>
+                        <div style="flex:1 1 120px"><label class="form-label">Batch no.</label><input name="batch_no" class="form-control"></div>
+                        <div style="flex:1 1 130px"><label class="form-label">Expiry</label><input type="date" name="expiry_date" class="form-control"></div>
+                    </div>
+                    <div class="row mt-3" style="gap:0">
+                        <div style="flex:1 1 100px"><label class="form-label">MRP ₹</label><input type="number" step="0.01" name="mrp" class="form-control" value="0"></div>
+                        <div style="flex:1 1 100px"><label class="form-label">Selling price ₹</label><input type="number" step="0.01" name="price" class="form-control" value="0"></div>
+                        <div style="flex:1 1 100px"><label class="form-label">Stock qty</label><input type="number" name="stock_quantity" class="form-control" value="10"></div>
+                        <div style="flex:1 1 140px;display:flex;align-items:flex-end">
+                            <label class="form-check"><input type="checkbox" name="prescription"> Prescription required</label>
+                        </div>
+                    </div>
+                    <button class="btn btn-success mt-3"><i class="bi bi-plus-lg"></i> Add to inventory</button>
+                </form>
+            </section>
+
+            <!-- Reservations -->
+            <section id="reservations" class="card mb-4" style="padding:1.5rem">
+                <h2 style="font-size:1.25rem"><i class="bi bi-bag-check text-teal"></i> Customer reservations</h2>
+                <p class="text-muted small">Pending holds expire automatically after 2 hours. Confirm when a customer is on the way, collect when they arrive.</p>
+                <div class="table-wrap">
+                    <table class="tbl">
+                        <thead><tr><th>Medicine</th><th>Customer</th><th>Qty</th><th>Held until</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        {% for r in reservations %}
+                        <tr>
+                            <td><strong>{{ r.med_name }}</strong><div class="small text-muted">{{ r.dosage or '' }}</div></td>
+                            <td>
+                                <div>{{ r.customer_name or 'Walk-in' }}</div>
+                                <a href="tel:{{ r.customer_phone }}" class="small mono">{{ r.customer_phone }}</a>
+                                {% if r.note %}<div class="small text-muted"><i class="bi bi-chat-left-text"></i> {{ r.note }}</div>{% endif %}
+                            </td>
+                            <td>{{ r.quantity }}</td>
+                            <td class="small">{{ r.held_until[:16] if r.held_until else '—' }}<br><span class="text-muted">{{ r.created_at[:16] }}</span></td>
+                            <td>
+                                {% if r.status == 'Pending' %}<span class="badge badge-amber">Pending</span>
+                                {% elif r.status == 'Confirmed' %}<span class="badge badge-teal">Confirmed</span>
+                                {% elif r.status == 'Collected' %}<span class="badge badge-green">Collected</span>
+                                {% elif r.status == 'Cancelled' %}<span class="badge badge-gray">Cancelled</span>
+                                {% else %}<span class="badge badge-red">Expired</span>{% endif %}
+                            </td>
+                            <td>
+                                <div class="flex gap-2">
+                                    {% if r.status in ['Pending','Confirmed'] %}
+                                    <form method="POST" action="{{ url_for('reservation_action', rid=r.id, action='confirm') }}"><button class="btn btn-outline btn-sm" title="Confirm"><i class="bi bi-check2"></i></button></form>
+                                    <form method="POST" action="{{ url_for('reservation_action', rid=r.id, action='collect') }}"><button class="btn btn-success btn-sm" title="Collected"><i class="bi bi-bag-check"></i></button></form>
+                                    <form method="POST" action="{{ url_for('reservation_action', rid=r.id, action='cancel') }}" data-confirm="Cancel this reservation?"><button class="btn btn-ghost btn-sm text-danger" title="Cancel"><i class="bi bi-x"></i></button></form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="empty"><i class="bi bi-bag"></i> No reservations yet. They'll appear here when customers hold medicines.</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Profile / location -->
+            <section id="profile" class="card" style="padding:1.5rem">
+                <h2 style="font-size:1.25rem"><i class="bi bi-shop-window text-teal"></i> Store profile &amp; location</h2>
+                <p class="text-muted small">Your public profile and map location. Customers see these on the search map.</p>
+
+                <form method="POST" action="{{ url_for('shop_profile_update') }}" enctype="multipart/form-data" id="profileForm">
+                    <div class="row" style="gap:0">
+                        <div style="flex:1 1 240px"><label class="form-label">Shop name</label><input name="name" class="form-control" value="{{ shop.name }}"></div>
+                        <div style="flex:1 1 180px"><label class="form-label">Phone</label><input type="tel" name="phone" class="form-control" value="{{ shop.phone or '' }}"></div>
+                        <div style="flex:1 1 180px"><label class="form-label">Email</label><input type="email" name="email" class="form-control" value="{{ shop.email or '' }}"></div>
+                    </div>
+                    <label class="form-label mt-3">Description</label>
+                    <textarea name="description" class="form-control" rows="2">{{ shop.description or '' }}</textarea>
+
+                    <div class="row mt-3" style="gap:0">
+                        <div style="flex:2 1 280px"><label class="form-label">Street address</label><input name="address" class="form-control" value="{{ shop.address or '' }}"></div>
+                        <div style="flex:1 1 140px"><label class="form-label">City</label><input name="city" id="cityField" class="form-control" value="{{ shop.city or '' }}"></div>
+                        <div style="flex:1 1 120px"><label class="form-label">State</label><input name="state" class="form-control" value="{{ shop.state or '' }}"></div>
+                        <div style="flex:1 1 100px"><label class="form-label">Pincode</label><input name="pincode" class="form-control" value="{{ shop.pincode or '' }}"></div>
+                    </div>
+
+                    <div class="row mt-3" style="gap:0">
+                        <div style="flex:1 1 130px"><label class="form-label">Opens at</label><input type="time" name="open_time" class="form-control" value="{{ shop.open_time or '09:00' }}"></div>
+                        <div style="flex:1 1 130px"><label class="form-label">Closes at</label><input type="time" name="close_time" class="form-control" value="{{ shop.close_time or '21:00' }}"></div>
+                        <div style="flex:1 1 160px;display:flex;flex-direction:column;justify-content:flex-end;gap:.5rem">
+                            <label class="form-check"><input type="checkbox" name="is_open_24h" value="1" {{ 'checked' if shop.is_open_24h }}> Open 24 hours</label>
+                            <label class="form-check"><input type="checkbox" name="delivery" value="1" {{ 'checked' if shop.delivery }}> Offers delivery</label>
+                        </div>
+                    </div>
+
+                    <label class="form-label mt-3">Update shop photo</label>
+                    <input type="file" name="shop_photo" accept="image/*" class="form-control">
+
+                    <h3 class="mt-4 mb-2" style="font-size:1rem"><i class="bi bi-pin-map"></i> Pin your location</h3>
+                    <div class="row" style="gap:0">
+                        <div style="flex:2 1 320px">
+                            <div class="input-group mb-2">
+                                <input type="text" id="addrSearch" class="form-control" placeholder="Search address, then click map to set pin">
+                                <button type="button" class="btn btn-primary" id="addrBtn"><i class="bi bi-search"></i></button>
+                            </div>
+                            <div id="admin-map" style="height:280px;border-radius:var(--radius);border:1px solid var(--line)"></div>
+                        </div>
+                        <div style="flex:1 1 180px;display:flex;flex-direction:column;gap:.75rem">
+                            <div><label class="form-label">Latitude</label><input type="text" name="lat" id="latField" class="form-control" value="{{ shop.lat or '' }}" readonly></div>
+                            <div><label class="form-label">Longitude</label><input type="text" name="lng" id="lngField" class="form-control" value="{{ shop.lng or '' }}" readonly></div>
+                            <button type="button" class="btn btn-outline" id="useMyLoc"><i class="bi bi-crosshair"></i> Use my location</button>
+                            <small class="form-hint">Click the map or drag the pin to set your exact storefront location.</small>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary mt-4 btn-lg"><i class="bi bi-save"></i> Save profile</button>
+                </form>
+            </section>
+        </main>
+    </div>
+</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Dashboard: quick stock update via API
+document.querySelectorAll(".stock-input").forEach(inp=>{
+    inp.addEventListener("change", async ()=>{
+        const id = inp.dataset.id, qty = +inp.value;
+        const r = await fetch(`/pharmacy/inventory/${id}/update`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ stock_quantity: qty })
+        });
+        if(r.ok){ MF.toast("Stock updated","success"); inp.closest("tr").style.background="var(--teal-50)"; setTimeout(()=>inp.closest("tr").style.background="",800);}
+        else MF.toast("Update failed","error");
+    });
+});
+
+// Edit item = scroll to add form prefilled? For now, simple prompt-based edit of price/dosage via API
+document.querySelectorAll("[data-edit]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+        const id = btn.dataset.edit;
+        const row = btn.closest("tr");
+        const fields = {
+            med_name: prompt("Medicine name", row.querySelector("strong").textContent),
+            price: prompt("Selling price", row.querySelector(".fw-semibold").textContent.replace(/[₹,]/g,"")),
+            stock_quantity: row.querySelector(".stock-input").value,
+        };
+        if(fields.med_name === null) return;
+        const r = await fetch(`/pharmacy/inventory/${id}/update`, {
+            method:"POST", headers:{"Content-Type":"application/json"},
+            body: JSON.stringify(fields)
+        });
+        if(r.ok){ MF.toast("Saved","success"); setTimeout(()=>location.reload(),400);}
+    });
+});
+
+// Sidebar smooth scroll & active
+document.querySelectorAll(".dash-side a").forEach(a=>{
+    a.addEventListener("click", e=>{
+        if(a.getAttribute("href").startsWith("#")){
+            e.preventDefault();
+            document.querySelector(a.getAttribute("href"))?.scrollIntoView({behavior:"smooth"});
+            document.querySelectorAll(".dash-side a").forEach(x=>x.classList.remove("active"));
+            a.classList.add("active");
+        }
+    });
+});
+
+// ---- Map for location pinning ----
+(function(){
+    const startLat = {{ shop.lat or DEFAULT_LAT }}, startLng = {{ shop.lng or DEFAULT_LNG }};
+    const map = L.map("admin-map").setView([startLat, startLng], {{ 15 if shop.lat else 12 }});
+    MF.addTileLayer(map);
+    const marker = L.marker([startLat, startLng], { draggable:true, icon: MF.makeIcon("amber") }).addTo(map);
+
+    function setLatLng(latlng, reverse){
+        document.getElementById("latField").value = latlng.lat.toFixed(6);
+        document.getElementById("lngField").value = latlng.lng.toFixed(6);
+        marker.setLatLng(latlng);
+        if(reverse) MF.reverseGeocode(latlng.lat, latlng.lng).then(c=>{ if(c) document.getElementById("cityField").value = c; });
+    }
+    marker.on("dragend", ()=> setLatLng(marker.getLatLng(), true));
+    map.on("click", e=> setLatLng(e.latlng, true));
+
+    document.getElementById("addrBtn").addEventListener("click", async ()=>{
+        const q = document.getElementById("addrSearch").value.trim();
+        if(!q) return;
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
+        const d = await r.json();
+        if(d[0]){ const la=+d[0].lat, ln=+d[0].lon; map.setView([la,ln],15); setLatLng({lat:la,lng:ln}, false);
+            document.getElementById("cityField").value = (d[0].display_name||"").split(",")[0] || "";
+            MF.toast("Location set","success");
+        } else MF.toast("Address not found","warning");
+    });
+    document.getElementById("useMyLoc").addEventListener("click", async ()=>{
+        try{ const p = await MF.getUserLocation(); map.setView([p.lat,p.lng],15); setLatLng(p, true); MF.toast("Location set","success");}
+        catch{ MF.toast("Couldn't get location","error"); }
+    });
+})();
+</script>
+{% endblock %}
