@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
-<meta name="color-scheme" content="dark">
-<meta name="description" content="{% block meta_desc %}MediFinder — Operational Pharmacy Infrastructure. Find genuine medicines at verified nearby pharmacies with spotlight search.{% endblock %}">
-<title>{% block title %}MediFinder — Operational Pharmacy Infrastructure{% endblock %}</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cg transform='rotate(-30 12 12)'%3E%3Ccircle cx='7.3' cy='3.2' r='1.45'/%3E%3Crect x='5.5' y='4.7' width='3.6' height='14.6' rx='1.8'/%3E%3Crect x='14.9' y='4.7' width='3.6' height='14.6' rx='1.8'/%3E%3Ccircle cx='16.7' cy='20.8' r='1.45'/%3E%3C/g%3E%3C/svg%3E">
+<meta name="theme-color" content="#0f766e">
+<meta name="color-scheme" content="light">
+<meta name="description" content="{% block meta_desc %}MediFinder — find genuine medicines at verified nearby pharmacies. Real-time inventory, distance, pricing and instant 2-hour holds.{% endblock %}">
+<title>{% block title %}MediFinder — Find medicines near you{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='10' fill='%230f172a'/%3E%3Cg transform='rotate(-28 16 16)'%3E%3Ccircle cx='10' cy='6' r='2' fill='white'/%3E%3Crect x='8' y='8' width='4' height='16' rx='2' fill='white'/%3E%3Crect x='20' y='8' width='4' height='16' rx='2' fill='white'/%3E%3Ccircle cx='22' cy='26' r='2' fill='white'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -15,68 +15,59 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 {% endif %}
 <script src="https://cdn.tailwindcss.com"></script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      fontFamily: {
-        sans: ['Inter','sans-serif'],
-        playfair: ['Playfair Display','serif'],
-      }
-    }
-  }
-}
-</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <script type="importmap">{"imports":{"motion":"https://cdn.jsdelivr.net/npm/motion@12.23.12/+esm"}}</script>
 {% block head %}{% endblock %}
 </head>
-<body style="background:#000;color:#fff" class="min-h-screen bg-black tracking-[-0.02em]" id="top">
-<div class="grain" aria-hidden="true"></div>
+<body id="top">
 <div class="menu-backdrop" aria-hidden="true"></div>
 
-<!-- Lithos fixed nav -->
-<nav class="nav-lithos">
-<div class="nav-lithos-left">
-<svg class="nav-lithos-logo-svg" viewBox="0 0 256 256" width="26" height="26" fill="#ffffff" aria-hidden="true"><path d="M 256 256 L 128 256 L 0 128 L 128 128 Z M 256 128 L 128 128 L 0 0 L 128 0 Z"/></svg>
-<span class="nav-lithos-wordmark">MediFinder</span>
-</div>
+<header class="site-header" role="banner">
+<div class="container">
+<div class="header-inner">
+<a class="logo" href="{{ url_for('index') }}" aria-label="MediFinder home">
+<span class="logo-mark" aria-hidden="true"><i class="bi bi-capsule-pill"></i></span>
+<span>MediFinder <small>Verified network</small></span>
+</a>
 
-<div class="nav-lithos-center" id="site-nav" aria-label="Primary">
+<nav class="nav-center" id="site-nav" aria-label="Primary">
 <a href="{{ url_for('index') }}" class="{% if request.path=='/' %}active{% endif %}">Home</a>
 <a href="{{ url_for('search_page') }}" class="{% if request.path.startswith('/search') %}active{% endif %}">Find Medicine</a>
 <a href="{{ url_for('shop_register') }}">For Pharmacies</a>
 {% if current_customer %}
 <a href="{{ url_for('account') }}">Account</a>
 {% else %}
-<a href="{{ url_for('customer_login') }}">Sign In</a>
+<a href="{{ url_for('customer_login') }}">Sign in</a>
 {% endif %}
-</div>
-
-<div class="nav-lithos-right">
-{% if current_customer %}
-<a href="{{ url_for('account') }}" class="nav-lithos-cta" style="background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.18)">{{ current_customer.name.split()[0] }}</a>
-{% elif current_shop %}
-<a href="{{ url_for('shop_dashboard') }}" class="nav-lithos-cta">Dashboard</a>
-{% else %}
-<a href="{{ url_for('search_page') }}" class="nav-lithos-cta">Find Medicine</a>
-{% endif %}
-<button class="nav-lithos-burger burger" type="button" aria-controls="site-nav" aria-expanded="false" aria-label="Open menu"><span></span><span></span><span></span></button>
-</div>
 </nav>
 
-<!-- Mobile nav -->
-<div class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation">
-<a href="{{ url_for('index') }}" class="{% if request.path=='/' %}active{% endif %}">Home</a>
-<a href="{{ url_for('search_page') }}" class="{% if request.path.startswith('/search') %}active{% endif %}">Find Medicine</a>
-<a href="{{ url_for('shop_register') }}">For Pharmacies</a>
+<div class="header-actions">
 {% if current_customer %}
-<a href="{{ url_for('account') }}">My Account</a>
+<a href="{{ url_for('account') }}" class="btn btn-ghost btn-sm"><i class="bi bi-person"></i> {{ current_customer.name.split()[0] }}</a>
+{% elif current_shop %}
+<a href="{{ url_for('shop_dashboard') }}" class="btn btn-solid btn-sm"><i class="bi bi-speedometer2"></i> Dashboard</a>
 {% else %}
-<a href="{{ url_for('customer_login') }}">Sign In</a>
+<a href="{{ url_for('customer_login') }}" class="btn btn-ghost btn-sm" style="display:none">Sign in</a>
+<a href="{{ url_for('search_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Find medicine</a>
 {% endif %}
-<a href="{{ url_for('search_page') }}" style="background:#e8702a;border-color:#e8702a;color:#fff">Start Searching</a>
+<button class="burger" type="button" aria-controls="site-nav" aria-expanded="false" aria-label="Open menu"><span></span><span></span><span></span></button>
+</div>
+</div>
+</div>
+</header>
+
+<div class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation">
+<a href="{{ url_for('index') }}" class="{% if request.path=='/' %}active{% endif %}"><span><i class="bi bi-house"></i> Home</span><i class="bi bi-chevron-right"></i></a>
+<a href="{{ url_for('search_page') }}" class="{% if request.path.startswith('/search') %}active{% endif %}"><span><i class="bi bi-search"></i> Find Medicine</span><i class="bi bi-chevron-right"></i></a>
+<a href="{{ url_for('shop_register') }}"><span><i class="bi bi-shop"></i> For Pharmacies</span><i class="bi bi-chevron-right"></i></a>
+{% if current_customer %}
+<a href="{{ url_for('account') }}"><span><i class="bi bi-person"></i> My Account</span><i class="bi bi-chevron-right"></i></a>
+{% else %}
+<a href="{{ url_for('customer_login') }}"><span><i class="bi bi-box-arrow-in-right"></i> Sign in</span><i class="bi bi-chevron-right"></i></a>
+{% endif %}
+<div style="margin-top:12px">
+<a href="{{ url_for('search_page') }}" class="btn btn-primary btn-lg btn-block"><i class="bi bi-search"></i> Start searching now</a>
+</div>
 </div>
 
 <main>
@@ -84,7 +75,7 @@ tailwind.config = {
 {% if messages %}
 <div class="flash-wrap" role="region" aria-label="Notifications">
 {% for category, msg in messages %}
-<div class="flash {{ category }}" role="alert"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ msg }}</div>
+<div class="flash {{ category }}" role="alert"><i class="bi bi-info-circle"></i> {{ msg }}</div>
 {% endfor %}
 </div>
 {% endif %}
@@ -96,14 +87,11 @@ tailwind.config = {
 <div class="container">
 <div class="footer-grid">
 <div>
-<div style="display:flex;align-items:center;gap:10px">
-<svg viewBox="0 0 256 256" width="26" height="26" fill="#ffffff" aria-hidden="true"><path d="M 256 256 L 128 256 L 0 128 L 128 128 Z M 256 128 L 128 128 L 0 0 L 128 0 Z"/></svg>
-<span class="font-playfair" style="font-style:italic;font-size:24px;color:#fff">MediFinder</span>
-</div>
-<p class="mt-3" style="max-width:320px;color:rgba(255,255,255,0.48);font-size:14px;line-height:1.6">Operational pharmacy infrastructure. Peel back distance to reveal verified stock near you.</p>
+<div class="logo" style="font-size:18px"><span class="logo-mark"><i class="bi bi-capsule-pill"></i></span> MediFinder</div>
+<p class="mt-3" style="max-width:320px;color:var(--muted);font-size:14px;line-height:1.6">Connecting patients to verified neighbourhood pharmacies with live, transparent inventory. No more calling ten shops.</p>
 <div class="flex gap-2 mt-3" style="flex-wrap:wrap">
-<span class="badge badge-teal">Licensed only</span>
-<span class="badge badge-amber">Distance sorted</span>
+<span class="badge badge-green"><i class="bi bi-shield-check"></i> Licensed only</span>
+<span class="badge badge-amber"><i class="bi bi-geo-alt"></i> Distance sorted</span>
 </div>
 </div>
 <div>
@@ -116,7 +104,7 @@ tailwind.config = {
 </ul>
 </div>
 <div>
-<h4>Explore</h4>
+<h4>Company</h4>
 <ul>
 <li><a href="#features">How it works</a></li>
 <li><a href="#testimonials">Testimonials</a></li>
@@ -133,13 +121,13 @@ tailwind.config = {
 </div>
 </div>
 <div class="footer-bottom">
-<span>© {{ current_year }} MediFinder — Layers hold tales of care</span>
-<span style="display:inline-flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 0 4px rgba(34,197,94,0.18)"></span> Live • Black only</span>
+<span>© {{ current_year }} MediFinder — Operational Pharmacy Infrastructure</span>
+<span><i class="bi bi-dot" style="color:#10b981;font-size:20px;vertical-align:middle"></i> All systems operational • Light theme</span>
 </div>
 </div>
 </footer>
 
-<div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="false" role="region" aria-label="Notifications"></div>
+<div class="toast-wrap" id="toastWrap" aria-live="polite" role="region" aria-label="Notifications"></div>
 
 {% if page_map %}
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -148,7 +136,7 @@ tailwind.config = {
 <script type="module" src="{{ url_for('static', filename='js/motion.js') }}"></script>
 <script>
 (function(){
-var burger=document.querySelector('.nav-lithos-burger');
+var burger=document.querySelector('.burger');
 var backdrop=document.querySelector('.menu-backdrop');
 function closeMenu(){
 document.body.classList.remove('menu-open');
@@ -166,28 +154,7 @@ if(document.body.classList.contains('menu-open')){closeMenu()}else{openMenu()}
 if(backdrop){backdrop.addEventListener('click',closeMenu)}
 document.querySelectorAll('.mobile-nav a, #site-nav a').forEach(function(a){a.addEventListener('click',closeMenu)});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeMenu()}});
-window.addEventListener('resize',function(){if(window.matchMedia('(min-width: 768px)').matches){closeMenu()}});
-document.querySelectorAll('.appear').forEach(function(el){
-el.addEventListener('animationend',function(){el.classList.add('is-in')},{once:true});
-});
-requestAnimationFrame(function(){
-requestAnimationFrame(function(){
-var needFallback=false;
-try{
-var els=document.querySelectorAll('.appear');
-for(var i=0;i<els.length;i++){
-var anims=els[i].getAnimations();
-var has=false;
-for(var j=0;j<anims.length;j++){var st=anims[j].playState;if(st==='running'||st==='finished'){has=true;break}}
-if(!has){needFallback=true;break}
-}
-}catch(e){needFallback=true}
-if(needFallback){
-document.querySelectorAll('.appear').forEach(function(e){e.classList.add('is-in')});
-document.querySelectorAll('.hero-lithos .base-layer, .hero-lithos').forEach(function(e){e.classList.add('is-in')});
-}
-});
-});
+window.addEventListener('resize',function(){if(window.matchMedia('(min-width: 900px)').matches){closeMenu()}});
 })();
 </script>
 {% block scripts %}{% endblock %}

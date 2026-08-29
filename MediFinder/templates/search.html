@@ -3,59 +3,65 @@
 {% block title %}Search — MediFinder{% endblock %}
 
 {% block content %}
-<section class="section-tight" style="padding-top:92px;background:#000">
+<section class="section-tight" style="padding-top:24px;background:var(--bg-soft);border-bottom:1px solid var(--border)">
 <div class="container">
-<form id="searchForm" class="searchbar-lithos mb-3 appear appear--soft" style="--d:0.16s" role="search" aria-label="Medicine search">
-<div class="field">
+<form id="searchForm" class="searchbar" role="search" aria-label="Medicine search" style="margin:0;position:relative">
+<div class="field" style="position:relative;flex:1.2">
 <i class="bi bi-search" aria-hidden="true"></i>
-<input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off" aria-label="Medicine or salt" aria-autocomplete="list" aria-controls="suggestBox">
-<div class="suggest-lithos" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
+<input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt — e.g. Dolo 650, Paracetamol" autocomplete="off" aria-label="Medicine or salt" aria-autocomplete="list" aria-controls="suggestBox">
+<div class="suggest" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
 </div>
-<div class="field" style="margin-top:8px">
+<div class="field">
 <i class="bi bi-geo-alt" aria-hidden="true"></i>
 <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area" aria-label="City or area">
-<button type="button" class="loc-btn" id="locateBtn" aria-label="Use my location"><i class="bi bi-crosshair" aria-hidden="true"></i></button>
+<button type="button" class="loc-btn" id="locateBtn" aria-label="Use my location"><i class="bi bi-crosshair"></i> Locate</button>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-<select id="sort" name="sort" class="form-select" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#fff;border-radius:10px;padding:.6rem .8rem;font-size:.9rem" aria-label="Sort results">
+<select id="sort" name="sort" class="form-select" style="min-height:48px;border-radius:12px;max-width:180px" aria-label="Sort results">
 <option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
-<option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low to high</option>
-<option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high to low</option>
+<option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low → high</option>
+<option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high → low</option>
 <option value="stock" {{ 'selected' if sort=='stock' }}>Most in stock</option>
 </select>
-<button class="cta-lithos" type="submit" aria-label="Search" style="justify-content:center">Search</button>
-</div>
+<button class="btn btn-primary" type="submit" aria-label="Search" style="min-height:48px;border-radius:12px;padding:0 20px"><i class="bi bi-search"></i> Search</button>
 </form>
 
-<div class="flex gap-2 center appear appear--soft" style="flex-wrap:wrap;justify-content:space-between;margin-bottom:1rem;--d:0.28s">
+<div class="flex gap-2 center" style="flex-wrap:wrap;justify-content:space-between;margin-top:14px">
 <div class="chips" id="catChips" role="group" aria-label="Filter by category">
-<button type="button" class="chip {{ '' if category else 'active' }}" data-cat="" aria-pressed="{{ 'true' if not category else 'false' }}">All categories</button>
+<button type="button" class="chip {{ '' if category else 'active' }}" data-cat="" aria-pressed="{{ 'true' if not category else 'false' }}">All</button>
 {% for c in categories %}
-<button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}" aria-pressed="{{ 'true' if category|string == c.id|string else 'false' }}"><i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }}</button>
+<button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}" aria-pressed="{{ 'true' if category|string == c.id|string else 'false' }}"><i class="bi {{ c.icon }}"></i> {{ c.name }}</button>
 {% endfor %}
 </div>
-<div class="flex gap-2 center" style="font-size:.85rem">
-<label class="form-check" style="margin:0;color:rgba(255,255,255,0.56)"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
-<select id="rx" class="form-select" style="width:auto;padding:.45rem .7rem;font-size:.85rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#fff;border-radius:10px" aria-label="Prescription filter">
-<option value="">Rx &amp; OTC</option>
+<div class="flex gap-2 center" style="font-size:13px">
+<label class="form-check" style="color:var(--muted)"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
+<select id="rx" class="form-select" style="width:auto;min-height:36px;padding:6px 10px;font-size:13px;border-radius:10px" aria-label="Prescription filter">
+<option value="">Rx & OTC</option>
 <option value="0" {{ 'selected' if rx=='0' }}>OTC only</option>
 <option value="1" {{ 'selected' if rx=='1' }}>Prescription</option>
 </select>
 </div>
 </div>
+</div>
+</section>
 
+<section class="section-tight" style="padding-top:20px">
+<div class="container">
 <div class="results-layout">
 <div>
-<div class="flex between center mb-2 appear appear--soft" style="--d:0.34s">
-<h2 class="mb-0" style="font-size:1.2rem;color:#fff" id="resultTitle">Searching...</h2>
-<span class="badge" id="resultCount" aria-live="polite" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12)">—</span>
+<div class="flex between center mb-3">
+<h2 style="font-size:16px;font-weight:700;letter-spacing:-0.01em" id="resultTitle">Searching...</h2>
+<span class="badge" id="resultCount" aria-live="polite">—</span>
 </div>
 <div class="results-list" id="resultsList" role="list" aria-label="Medicine results" aria-busy="false">
-<div class="empty"><i class="bi bi-search" aria-hidden="true"></i> Enter a medicine name above to see live availability.</div>
+<div class="empty"><i class="bi bi-search"></i> Enter a medicine name above to see live availability.</div>
 </div>
 </div>
 
-<div class="map-wrap appear appear--scale" data-reveal style="--d:0.40s">
+<div class="map-wrap">
+<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:#fff">
+<div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:8px;background:var(--bg-soft);border:1px solid var(--border);display:grid;place-items:center"><i class="bi bi-map" style="font-size:14px"></i></div><div style="font-weight:600;font-size:13px">Pharmacy map</div></div>
+<span class="badge badge-green" style="font-size:10px"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block"></span> Live</span>
+</div>
 <div id="map" role="application" aria-label="Map of nearby pharmacies"></div>
 </div>
 </div>
@@ -127,7 +133,7 @@ function placeUser(){
 async function locateUser(){
     const btn = document.getElementById("locateBtn");
     const orig = btn.innerHTML;
-    btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>';
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
     btn.disabled = true;
     try {
         await MF.getUserLocation();
@@ -135,9 +141,9 @@ async function locateUser(){
         const c = await MF.reverseGeocode(MF.userPos.lat, MF.userPos.lng);
         if(c) document.getElementById("city").value = c;
         map.flyTo([MF.userPos.lat, MF.userPos.lng], 14);
-        MF.toast("Location detected", "success");
+        MF.toast("Location detected","success");
         runSearch();
-    } catch { MF.toast("Couldn't access location", "warning"); }
+    } catch { MF.toast("Couldn't access location","warning"); }
     finally { btn.innerHTML = orig; btn.disabled = false; }
 }
 function activeCat(){
@@ -170,7 +176,7 @@ async function runSearch(){
         lastResults = data.results || [];
         render(lastResults);
     } catch(e){
-        list.innerHTML = `<div class="empty"><i class="bi bi-wifi-off" aria-hidden="true"></i> Couldn't reach the search service.</div>`;
+        list.innerHTML = `<div class="empty"><i class="bi bi-wifi-off"></i> Couldn't reach the search service.</div>`;
     } finally {
         list.setAttribute("aria-busy","false");
     }
@@ -181,7 +187,7 @@ function render(results){
     markers.layer.clearLayers();
     activeCard = null;
     if(!results.length){
-        list.innerHTML = `<div class="empty"><i class="bi bi-emoji-frown" aria-hidden="true"></i>
+        list.innerHTML = `<div class="empty"><i class="bi bi-emoji-frown"></i>
             <strong>No matches.</strong><br><span class="small">Try the generic salt name, a different area, or uncheck "In stock only".</span></div>`;
         return;
     }
@@ -189,22 +195,21 @@ function render(results){
     const bounds = [];
     results.forEach((it, i)=>{
         const card = document.createElement("div");
-        card.className = "med-card appear appear--soft";
-        card.style.setProperty("--d", (0.05 + i*0.04)+"s");
+        card.className = "med-card";
         card.setAttribute("role","listitem");
         card.setAttribute("tabindex","0");
         card.setAttribute("aria-label", `${it.med_name} at ${it.shop_name}, ${it.stock_quantity} in stock, ${MF.fmtMoney(it.price)}`);
         const stockTag = it.stock_quantity > 0
-            ? `<span class="tag tag-stock"><i class="bi bi-check2-circle" aria-hidden="true"></i> ${it.stock_quantity} in stock</span>`
-            : `<span class="tag tag-out"><i class="bi bi-x-circle" aria-hidden="true"></i> Out of stock</span>`;
+            ? `<span class="tag tag-stock"><i class="bi bi-check2-circle"></i> ${it.stock_quantity} in stock</span>`
+            : `<span class="tag tag-out"><i class="bi bi-x-circle"></i> Out of stock</span>`;
         const rxTag = it.prescription
-            ? `<span class="tag tag-rx"><i class="bi bi-file-earmark-medical" aria-hidden="true"></i> Rx</span>`
-            : `<span class="tag tag-otc"><i class="bi bi-bag-check" aria-hidden="true"></i> OTC</span>`;
-        const disc = it.discount_pct ? `<span class="tag tag-discount"><i class="bi bi-tags" aria-hidden="true"></i> ${it.discount_pct}% off MRP</span>` : "";
+            ? `<span class="tag tag-rx"><i class="bi bi-file-earmark-medical"></i> Rx</span>`
+            : `<span class="tag tag-otc"><i class="bi bi-bag-check"></i> OTC</span>`;
+        const disc = it.discount_pct ? `<span class="tag tag-discount"><i class="bi bi-tags"></i> ${it.discount_pct}% off</span>` : "";
         const dist = it.distance_km != null ? MF.fmtDistance(it.distance_km) : (it.city||"");
         const open = it.open_now
-            ? `<span class="open-dot" aria-hidden="true"></span> Open now`
-            : `<span class="open-dot closed" aria-hidden="true"></span> Closed`;
+            ? `<span class="open-dot"></span> Open now`
+            : `<span class="open-dot closed"></span> Closed`;
         card.innerHTML = `
             <div class="med-top">
                 <div>
@@ -214,19 +219,19 @@ function render(results){
                 <div class="med-price">${MF.fmtMoney(it.price)}</div>
             </div>
             <div class="med-meta">${rxTag}${stockTag}${disc}
-                ${it.category_name?`<span class="tag"><i class="bi bi-tag" aria-hidden="true"></i> ${it.category_name}</span>`:""}
-                ${it.delivery?`<span class="tag"><i class="bi bi-truck" aria-hidden="true"></i> Delivery</span>`:""}
+                ${it.category_name?`<span class="tag"><i class="bi bi-tag"></i> ${it.category_name}</span>`:""}
+                ${it.delivery?`<span class="tag"><i class="bi bi-truck"></i> Delivery</span>`:""}
             </div>
             <div class="med-shop">
                 <div>
                     <a href="/pharmacy/${it.shop_id}" class="shop-name" onclick="event.stopPropagation()" aria-label="View ${it.shop_name} profile">
-                        <i class="bi bi-shop" aria-hidden="true"></i> ${it.shop_name}
+                        <i class="bi bi-shop"></i> ${it.shop_name}
                     </a>
-                    <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt" aria-hidden="true"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building" aria-hidden="true"></i> ${it.manufacturer}</span>`:""}</div>
+                    <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building"></i> ${it.manufacturer}</span>`:""}</div>
                 </div>
                 <div class="flex gap-2" style="flex:none">
-                    <button class="btn btn-ghost btn-sm" title="Save" data-fav aria-label="Save ${it.med_name} to favourites"><i class="bi bi-bookmark" aria-hidden="true"></i></button>
-                    <button class="btn btn-solid btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve aria-label="Hold ${it.med_name} at ${it.shop_name}"><i class="bi bi-bag-check" aria-hidden="true"></i> Hold</button>
+                    <button class="btn btn-ghost btn-sm" title="Save" data-fav aria-label="Save ${it.med_name}"><i class="bi bi-bookmark"></i></button>
+                    <button class="btn btn-primary btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve aria-label="Hold ${it.med_name}"><i class="bi bi-bag-check"></i> Hold</button>
                 </div>
             </div>`;
         card.addEventListener("mouseenter", ()=>{ highlight(i); });
@@ -251,7 +256,6 @@ function render(results){
     });
     if (MF.userPos) bounds.push([MF.userPos.lat, MF.userPos.lng]);
     if (bounds.length) map.fitBounds(bounds, { padding:[40,40], maxZoom:14 });
-    document.dispatchEvent(new CustomEvent("mf:results-rendered", { detail: { count: results.length } }));
 }
 function popupHtml(it){
     return `<h6 style="color:#111">${it.shop_name}</h6>
@@ -261,9 +265,9 @@ function popupHtml(it){
             <strong style="color:#111;font-size:1.05rem">${MF.fmtMoney(it.price)}</strong>
             <span class="tag ${it.stock_quantity>0?'tag-stock':'tag-out'}">${it.stock_quantity>0?it.stock_quantity+' in stock':'Out of stock'}</span>
         </div>
-        <button class="btn btn-solid btn-sm btn-block" ${it.stock_quantity>0?"":"disabled"}
+        <button class="btn btn-primary btn-sm btn-block" ${it.stock_quantity>0?"":"disabled"}
             onclick="MF.openReserve(${it.med_id}, '${it.med_name.replace(/'/g,"\\'")}', '${it.shop_name.replace(/'/g,"\\'")}')">
-            <i class="bi bi-bag-check" aria-hidden="true"></i> Hold for 2 hours
+            <i class="bi bi-bag-check"></i> Hold for 2 hours
         </button>`;
 }
 function highlight(i){

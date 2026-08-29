@@ -1,114 +1,148 @@
 {% extends "base.html" %}
 {% set page_map = false %}
-{% block title %}MediFinder — Operational Pharmacy Infrastructure{% endblock %}
+{% block title %}MediFinder — Find medicines nearby, instantly{% endblock %}
 
 {% block content %}
-<!-- LITHOS HERO — full-screen dark with spotlight reveal -->
-<section class="hero-lithos">
-<div class="base-layer hero-zoom" aria-hidden="true"></div>
-<div class="reveal-layer" aria-hidden="true"></div>
-<canvas class="reveal-canvas" aria-hidden="true"></canvas>
+<section class="hero">
+<div class="container">
+<div class="hero-grid">
+<div>
+<div class="eyebrow"><span class="dot"></span> Trusted by {{ shops|length }}+ verified pharmacies</div>
+<h1 class="hero-title">Find medicines <em>nearby, instantly</em></h1>
+<p class="hero-lede">Every pharmacy listing is verified with a drug license. Search by brand or salt, see live stock, distance and price — then hold for 2 hours.</p>
 
-<div class="hero-heading">
-<h1>
-<span class="line1 hero-anim hero-reveal font-playfair" style="animation-delay:0.25s;letter-spacing:-0.05em">Find medicines</span>
-<span class="line2 hero-anim hero-reveal" style="animation-delay:0.42s;letter-spacing:-0.08em">nearby, <em>instantly</em></span>
-</h1>
-</div>
-
-<div class="hero-bottom-left hero-anim hero-fade" style="animation-delay:0.7s">
-<p>Every pharmacy listing records a chapter of care — from ancient generics to modern salts, verified across neighbourhood stores near you.</p>
-</div>
-
-<div class="hero-bottom-right hero-anim hero-fade" style="animation-delay:0.85s">
-<p>Our interactive map lets you peel back distance to trace how stock, pricing, and trust combine to shape the pharmacy beneath your feet.</p>
-
-<form class="searchbar-lithos" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search" aria-label="Medicine search" style="position:relative">
-<div class="field">
+<form class="searchbar" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search" aria-label="Medicine search" style="position:relative">
+<div class="field" style="position:relative">
 <i class="bi bi-search" aria-hidden="true"></i>
-<input type="text" name="q" id="heroQuery" placeholder="Paracetamol, Azithromycin..." autocomplete="off" aria-label="Search medicine" aria-autocomplete="list" aria-controls="suggestBox">
-<div class="suggest-lithos" id="suggestBox" role="listbox" aria-label="Search suggestions"></div>
+<input type="text" name="q" id="heroQuery" placeholder="Paracetamol, Dolo 650, Azithromycin..." autocomplete="off" aria-label="Search medicine" aria-autocomplete="list" aria-controls="suggestBox">
+<div class="suggest" id="suggestBox" role="listbox" aria-label="Search suggestions"></div>
 </div>
-<div class="field" style="margin-top:8px">
+<div class="field">
 <i class="bi bi-geo-alt" aria-hidden="true"></i>
 <input type="text" name="city" id="heroCity" placeholder="Your city or area" aria-label="City">
-<button type="button" class="loc-btn" id="locateBtn" aria-label="Use my current location"><i class="bi bi-crosshair" aria-hidden="true"></i> Locate</button>
+<button type="button" class="loc-btn" id="locateBtn" aria-label="Use my current location"><i class="bi bi-crosshair"></i> Locate</button>
 </div>
-<button class="cta-lithos" type="submit" style="margin-top:8px;width:100%;justify-content:center">Start Searching</button>
+<button class="btn btn-primary" type="submit" style="min-height:48px;padding:0 20px;border-radius:12px"><i class="bi bi-arrow-right"></i> Search</button>
 </form>
 
-<div class="chips mt-3" id="trendingChips" role="group" aria-label="Trending medicines" style="margin-top:12px;justify-content:flex-start">
+<div class="chips" id="trendingChips" role="group" aria-label="Trending medicines" style="margin-top:14px">
+<span style="font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase;margin-right:4px">Trending:</span>
 {% for t in trending[:5] %}
 <button type="button" class="chip" data-q="{{ t.med_name }}">{{ t.med_name }}</button>
 {% endfor %}
 </div>
 
-<div class="hero-meta" style="margin-top:16px;justify-content:flex-start">
-<div><i class="bi bi-clock-history"></i> 2-hour holds</div>
-<div><i class="bi bi-geo"></i> Distance sorted</div>
+<div class="hero-meta">
+<span><i class="bi bi-clock-history"></i> 2-hour holds, no payment upfront</span>
+<span><i class="bi bi-geo"></i> Nearest-first sorting</span>
+<span><i class="bi bi-shield-check"></i> Licensed & reviewed</span>
 </div>
-</div>
-</section>
 
-<!-- STATS — lithos style but medifinder data -->
-<section class="section-tight" style="padding-top:40px;background:#000">
-<div class="container">
 <div class="stat-row">
 <div class="stat"><div class="num">{{ shops|length }}+</div><div class="lbl">Verified pharmacies</div></div>
-<div class="stat"><div class="num">{{ categories|length }}</div><div class="lbl">Medicine categories</div></div>
+<div class="stat"><div class="num">{{ categories|length }}</div><div class="lbl">Categories</div></div>
 <div class="stat"><div class="num">2 hrs</div><div class="lbl">Reservation hold</div></div>
-<div class="stat"><div class="num">100%</div><div class="lbl">Licensed &amp; reviewed</div></div>
+<div class="stat"><div class="num">24/7</div><div class="lbl">Search access</div></div>
+</div>
+</div>
+
+<div style="position:relative">
+<div class="card card-flush" style="border-radius:20px;overflow:hidden;box-shadow:var(--shadow-lg)">
+<div style="padding:18px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+<div style="display:flex;align-items:center;gap:10px">
+<div style="width:32px;height:32px;border-radius:10px;background:var(--primary-soft);border:1px solid #99f6e0;display:grid;place-items:center;color:var(--primary)"><i class="bi bi-map"></i></div>
+<div><div style="font-weight:700;font-size:14px">Live pharmacy map</div><div style="font-size:12px;color:var(--muted)">Patna • 12 pharmacies nearby</div></div>
+</div>
+<span class="badge badge-green"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block"></span> Live</span>
+</div>
+<div style="aspect-ratio:4/3;background:linear-gradient(180deg,#f8fafc,#f1f5f9);position:relative;display:grid;place-items:center;overflow:hidden">
+<!-- Simple map preview illustration -->
+<svg viewBox="0 0 400 300" width="100%" height="100%" style="display:block" aria-hidden="true">
+<rect width="400" height="300" fill="#f8fafc"/>
+<g opacity="0.6">
+<path d="M0 120 Q100 100 200 120 T400 115" stroke="#e2e8f0" stroke-width="1" fill="none"/>
+<path d="M0 180 Q120 160 240 180 T400 175" stroke="#e2e8f0" stroke-width="1" fill="none"/>
+<path d="M80 0 Q90 100 85 200 T90 300" stroke="#e2e8f0" stroke-width="1" fill="none"/>
+<path d="M200 0 Q210 120 205 200 T210 300" stroke="#e2e8f0" stroke-width="1" fill="none"/>
+<path d="M320 0 Q330 100 325 200 T330 300" stroke="#e2e8f0" stroke-width="1" fill="none"/>
+</g>
+<circle cx="120" cy="110" r="8" fill="#0f766e" stroke="#fff" stroke-width="2"/>
+<circle cx="220" cy="140" r="10" fill="#0f172a" stroke="#fff" stroke-width="2"/>
+<circle cx="180" cy="200" r="7" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
+<circle cx="280" cy="180" r="8" fill="#0f766e" stroke="#fff" stroke-width="2"/>
+<circle cx="160" cy="90" r="6" fill="#64748b" stroke="#fff" stroke-width="2"/>
+</svg>
+<div style="position:absolute;bottom:14px;left:14px;right:14px;display:flex;gap:8px">
+<div class="card" style="flex:1;padding:10px 12px;border-radius:12px;box-shadow:var(--shadow-md)">
+<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted)">Closest match</div>
+<div style="font-weight:700;font-size:13px;margin-top:2px">Sharma Pharmacy • 0.8 km</div>
+<div style="font-size:12px;color:var(--muted);margin-top:2px">Dolo 650 • ₹32 • 24 in stock</div>
+</div>
+<div class="card" style="padding:10px 12px;border-radius:12px;box-shadow:var(--shadow-md);display:grid;place-items:center;min-width:56px">
+<i class="bi bi-geo-alt" style="font-size:18px;color:var(--primary)"></i>
+<div style="font-size:11px;font-weight:700;margin-top:2px">Map</div>
+</div>
+</div>
+</div>
+<div style="padding:14px 20px;background:var(--bg-soft);display:flex;gap:10px;align-items:center;justify-content:space-between">
+<div style="font-size:12px;color:var(--muted)"><i class="bi bi-lightning-charge" style="color:var(--primary)"></i> Real-time inventory • Updated 2 min ago</div>
+<a href="{{ url_for('search_page') }}" class="btn btn-ghost btn-sm" style="border-radius:10px"><i class="bi bi-arrow-up-right"></i> Open map</a>
+</div>
+</div>
+
+<div class="card" style="margin-top:14px;padding:14px 16px;display:flex;gap:12px;align-items:center;border-radius:14px">
+<div style="width:40px;height:40px;border-radius:10px;background:#fff;border:1px solid var(--border);display:grid;place-items:center;flex:none"><i class="bi bi-patch-check" style="color:var(--primary);font-size:18px"></i></div>
+<div style="flex:1"><div style="font-weight:600;font-size:13px">Every pharmacy is license-verified</div><div style="font-size:12px;color:var(--muted);margin-top:2px">We manually review drug license, address & photos before listing.</div></div>
+</div>
+</div>
 </div>
 </div>
 </section>
 
-<!-- FEATURES — dark glass -->
-<section class="section" id="features" style="background:#000">
+<section class="section" id="features">
 <div class="container">
-<div class="text-center" style="max-width:640px;margin:0 auto 40px">
-<span class="eyebrow">How it works</span>
-<h2 style="font-size:42px;letter-spacing:-0.05em;line-height:0.95;color:#fff;margin-top:12px"><span class="font-playfair" style="font-style:italic;font-weight:400">Built</span> for the moment you need medicine now</h2>
-<p style="color:rgba(255,255,255,0.56);margin-top:12px">Three steps from symptom to shelf. No accounts required to search — sign in only to hold favourites and track reservations.</p>
+<div style="max-width:640px">
+<span class="kicker">How it works</span>
+<h2 class="h2">Built for the moment you <em>need medicine now</em></h2>
+<p class="p-muted">Three steps from symptom to shelf. No account required to search — sign in only to hold favourites and track reservations.</p>
 </div>
-<div class="feature-grid">
-<div class="card card-hover feature"><div class="ico"><i class="bi bi-search-heart"></i></div><h3>Search by name or salt</h3><p>Type a brand (Dolo 650) or the active ingredient (Paracetamol). We match across every verified pharmacy's live inventory.</p></div>
-<div class="card card-hover feature"><div class="ico"><i class="bi bi-map"></i></div><h3>See distance &amp; price</h3><p>Results are sorted nearest-first with live pricing, stock counts, discounts and open/closed status on a map.</p></div>
-<div class="card card-hover feature"><div class="ico"><i class="bi bi-bag-check"></i></div><h3>Hold in two taps</h3><p>Reserve with your phone. The pharmacy keeps it aside for two hours — no upfront payment, no out-of-stock surprises.</p></div>
+<div class="feature-grid" style="margin-top:32px">
+<div class="card feature"><div class="ico"><i class="bi bi-search-heart"></i></div><h3>Search by name or salt</h3><p>Type a brand (Dolo 650) or active ingredient (Paracetamol). We match across every verified pharmacy's live inventory.</p></div>
+<div class="card feature"><div class="ico"><i class="bi bi-map"></i></div><h3>See distance & price</h3><p>Results sorted nearest-first with live pricing, stock counts, discounts and open/closed status on a map.</p></div>
+<div class="card feature"><div class="ico"><i class="bi bi-bag-check"></i></div><h3>Hold in two taps</h3><p>Reserve with your phone. Pharmacy keeps it aside for two hours — no upfront payment, no out-of-stock surprises.</p></div>
 </div>
 </div>
 </section>
 
-<!-- TESTIMONIALS -->
-<section class="section testimonials" id="testimonials">
+<section class="section section-soft" id="testimonials">
 <div class="container">
-<div class="flex between center" style="flex-wrap:wrap;gap:16px;margin-bottom:24px">
+<div class="flex between center" style="flex-wrap:wrap;gap:16px;margin-bottom:20px">
 <div>
-<span class="eyebrow">Trusted by patients</span>
-<h2 style="font-size:28px;color:#fff;margin-top:8px">Real stories, verified pharmacies</h2>
+<span class="kicker">Trusted by patients</span>
+<h2 class="h2" style="margin-top:8px;font-size:24px">Real stories, verified pharmacies</h2>
 </div>
 <div class="flex gap-2">
-<button class="btn btn-ghost btn-sm" id="testiPrev" aria-label="Previous"><i class="bi bi-chevron-left"></i></button>
-<button class="btn btn-ghost btn-sm" id="testiNext" aria-label="Next"><i class="bi bi-chevron-right"></i></button>
+<button class="btn btn-ghost btn-sm" id="testiPrev" aria-label="Previous" style="border-radius:10px"><i class="bi bi-chevron-left"></i></button>
+<button class="btn btn-ghost btn-sm" id="testiNext" aria-label="Next" style="border-radius:10px"><i class="bi bi-chevron-right"></i></button>
 </div>
 </div>
 <div class="testimonial-track" id="testiTrack" role="region" aria-label="Testimonials" tabindex="0">
-<div class="testimonial-card"><div class="quote">“Found Azithromycin at 11 PM within 800m. The hold saved me.”</div><div class="author"><div class="avatar">AR</div><div class="meta"><strong>Ananya R.</strong><small>Patna • Verified</small></div></div></div>
+<div class="testimonial-card"><div class="quote">“Found Azithromycin at 11 PM within 800m. The hold saved me from visiting 5 shops.”</div><div class="author"><div class="avatar">AR</div><div class="meta"><strong>Ananya R.</strong><small>Patna • Verified buyer</small></div></div></div>
 <div class="testimonial-card"><div class="quote">“Price comparison is honest. I saved ₹180 on monthly medicines.”</div><div class="author"><div class="avatar">VK</div><div class="meta"><strong>Vikram K.</strong><small>Kankarbagh</small></div></div></div>
-<div class="testimonial-card"><div class="quote">“As a pharmacist, listings take 2 minutes. 12–15 holds daily.”</div><div class="author"><div class="avatar">SP</div><div class="meta"><strong>Sharma Pharmacy</strong><small>Frazer Road</small></div></div></div>
-<div class="testimonial-card"><div class="quote">“Distance sorting is a lifesaver during fever.”</div><div class="author"><div class="avatar">MT</div><div class="meta"><strong>Meera T.</strong><small>Boring Road</small></div></div></div>
+<div class="testimonial-card"><div class="quote">“As a pharmacist, listings take 2 minutes. We get 12–15 holds daily.”</div><div class="author"><div class="avatar">SP</div><div class="meta"><strong>Sharma Pharmacy</strong><small>Frazer Road</small></div></div></div>
+<div class="testimonial-card"><div class="quote">“Distance sorting is a lifesaver during fever. Clean UI, fast search.”</div><div class="author"><div class="avatar">MT</div><div class="meta"><strong>Meera T.</strong><small>Boring Road</small></div></div></div>
 </div>
 </div>
 </section>
 
-<!-- CATEGORIES -->
-<section class="section" style="border-top:1px solid rgba(255,255,255,0.06)">
+<section class="section" id="categories">
 <div class="container">
-<div class="flex between center" style="flex-wrap:wrap;gap:16px;margin-bottom:24px">
+<div class="flex between center" style="flex-wrap:wrap;gap:16px;margin-bottom:20px">
 <div>
-<span class="eyebrow">Browse</span>
-<h2 style="color:#fff;margin-top:8px">Shop by category</h2>
+<span class="kicker">Browse</span>
+<h2 class="h2" style="font-size:24px;margin-top:8px">Shop by category</h2>
 </div>
-<a href="{{ url_for('search_page') }}" class="btn btn-ghost"><i class="bi bi-grid"></i> View all inventory</a>
+<a href="{{ url_for('search_page') }}" class="btn btn-ghost btn-sm" style="border-radius:10px"><i class="bi bi-grid"></i> View all inventory</a>
 </div>
 <div class="chips" style="gap:10px">
 {% for c in categories %}
@@ -118,42 +152,47 @@
 </div>
 </section>
 
-<!-- FOR PHARMACIES -->
-<section class="section" id="about">
+<section class="section" id="about" style="padding-top:0">
 <div class="container">
-<div class="card" style="padding:0;overflow:hidden;display:grid;grid-template-columns:1.1fr .9fr;border-radius:22px">
-<div style="padding:clamp(24px,4vw,48px);background:#0a0a0a;color:#e8e8e8;border-right:1px solid rgba(255,255,255,0.06)">
-<span class="eyebrow" style="background:rgba(255,255,255,0.06);color:#fff;border-color:rgba(255,255,255,0.12)">For pharmacists</span>
-<h2 style="color:#fff;margin-top:12px;font-size:36px;letter-spacing:-0.04em;line-height:0.95">Run a <em class="font-playfair" style="font-style:italic;font-weight:400;color:#e8702a">smarter</em> counter.</h2>
-<p style="color:rgba(255,255,255,0.56);max-width:440px;margin-top:12px">List your inventory in minutes, manage stock from one dashboard, accept 2-hour holds from nearby customers.</p>
-<ul class="auth-points" style="margin:24px 0">
-<li><i class="bi bi-check-circle-fill"></i> Real-time inventory with expiry &amp; batch tracking</li>
+<div class="card card-flush" style="display:grid;grid-template-columns:1.1fr .9fr;border-radius:20px;overflow:hidden">
+<div style="padding:clamp(24px,4vw,40px);background:#fff">
+<span class="eyebrow" style="background:#f1f5f9;border-color:var(--border);color:var(--text-soft)"><i class="bi bi-shop"></i> For pharmacists</span>
+<h2 class="h2" style="margin-top:12px">Run a <em>smarter</em> counter.</h2>
+<p class="p-muted" style="max-width:44ch">List inventory in minutes, manage stock from one dashboard, accept 2-hour holds from nearby customers. No commissions.</p>
+<ul class="auth-points" style="margin:20px 0 0 0">
+<li><i class="bi bi-check-circle-fill"></i> Real-time inventory with expiry & batch tracking</li>
 <li><i class="bi bi-check-circle-fill"></i> Reservation workflow: confirm → collect → complete</li>
-<li><i class="bi bi-check-circle-fill"></i> Store profile with hours, location, delivery and photos</li>
+<li><i class="bi bi-check-circle-fill"></i> Store profile with hours, location, delivery & photos</li>
 <li><i class="bi bi-check-circle-fill"></i> Dashboard analytics: stock value, expiring items, demand</li>
 </ul>
-<div class="flex gap-2" style="flex-wrap:wrap">
-<a href="{{ url_for('shop_register') }}" class="btn btn-solid btn-lg" style="background:#e8702a;border-color:#e8702a;color:#fff">Register your pharmacy</a>
+<div class="flex gap-2" style="flex-wrap:wrap;margin-top:22px">
+<a href="{{ url_for('shop_register') }}" class="btn btn-primary btn-lg">Register your pharmacy</a>
 <a href="{{ url_for('shop_login') }}" class="btn btn-ghost btn-lg">Pharmacy sign in</a>
 </div>
 </div>
-<div style="padding:clamp(24px,4vw,48px);display:flex;flex-direction:column;justify-content:center;gap:16px;background:rgba(255,255,255,0.02)">
-<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:20px;flex:none;border:1px solid rgba(255,255,255,0.08)"><i class="bi bi-patch-check"></i></div><div><strong style="color:#fff">Verified network</strong><div class="small" style="color:rgba(255,255,255,0.48)">Every pharmacy submits a drug license, reviewed by our team.</div></div></div>
-<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:20px;flex:none;border:1px solid rgba(255,255,255,0.08)"><i class="bi bi-cash-coin"></i></div><div><strong style="color:#fff">Transparent pricing</strong><div class="small" style="color:rgba(255,255,255,0.48)">See MRP and selling price side by side.</div></div></div>
-<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:20px;flex:none;border:1px solid rgba(255,255,255,0.08)"><i class="bi bi-star"></i></div><div><strong style="color:#fff">Community reviews</strong><div class="small" style="color:rgba(255,255,255,0.48)">Patients rate pharmacies so great service gets noticed.</div></div></div>
+<div style="padding:clamp(20px,3vw,28px);background:var(--bg-soft);border-left:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;gap:16px">
+<div class="flex gap-3 center"><div style="width:40px;height:40px;border-radius:10px;background:#fff;border:1px solid var(--border);display:grid;place-items:center;flex:none"><i class="bi bi-patch-check" style="color:var(--primary)"></i></div><div><strong style="font-size:14px">Verified network</strong><div class="small" style="color:var(--muted)">Every pharmacy submits a drug license, reviewed by our team.</div></div></div>
+<div class="flex gap-3 center"><div style="width:40px;height:40px;border-radius:10px;background:#fff;border:1px solid var(--border);display:grid;place-items:center;flex:none"><i class="bi bi-cash-coin" style="color:var(--primary)"></i></div><div><strong style="font-size:14px">Transparent pricing</strong><div class="small" style="color:var(--muted)">See MRP and selling price side by side, with discount.</div></div></div>
+<div class="flex gap-3 center"><div style="width:40px;height:40px;border-radius:10px;background:#fff;border:1px solid var(--border);display:grid;place-items:center;flex:none"><i class="bi bi-star" style="color:var(--primary)"></i></div><div><strong style="font-size:14px">Community reviews</strong><div class="small" style="color:var(--muted)">Patients rate pharmacies so great service gets noticed.</div></div></div>
+<div class="card" style="margin-top:8px;padding:12px 14px;border-radius:12px;background:#fff">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted)"><span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 0 4px rgba(16,185,129,0.16)"></span> Live demo data</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+<div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Today's holds</div><div style="font-size:20px;font-weight:800;margin-top:2px">18</div></div>
+<div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:10px;padding:10px"><div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Stock value</div><div style="font-size:20px;font-weight:800;margin-top:2px">₹2.4L</div></div>
+</div>
+</div>
 </div>
 </div>
 </div>
 </section>
 
-<!-- CTA -->
 <section class="section-tight">
-<div class="container text-center" style="max-width:680px">
-<span class="eyebrow" style="background:linear-gradient(90deg,#7d7d7d 0%,#2a2a2a 52%,#0a0a0a 100%);color:#f2f2f2;border:0">Get started now</span>
-<h2 style="color:#fff;margin-top:12px;font-size:36px;letter-spacing:-0.04em">Need something tonight?</h2>
-<p style="color:rgba(255,255,255,0.56)">Search now — no account needed. Sign up to track reservations and save your regular medicines.</p>
-<div class="flex gap-2 center" style="justify-content:center;flex-wrap:wrap;margin-top:20px">
-<a href="{{ url_for('search_page') }}" class="btn btn-solid btn-lg" style="background:#fff;color:#000">Find medicine now</a>
+<div class="container text-center" style="max-width:640px">
+<div class="eyebrow" style="margin:0 auto"><i class="bi bi-lightning-charge"></i> Get started now</div>
+<h2 class="h2" style="margin-top:12px">Need something tonight?</h2>
+<p class="p-muted" style="margin-inline:auto">Search now — no account needed. Sign up to track reservations and save your regular medicines.</p>
+<div class="flex gap-2 center" style="justify-content:center;flex-wrap:wrap;margin-top:18px">
+<a href="{{ url_for('search_page') }}" class="btn btn-primary btn-lg"><i class="bi bi-search"></i> Find medicine now</a>
 <a href="{{ url_for('customer_register') }}" class="btn btn-ghost btn-lg">Create account</a>
 </div>
 </div>
@@ -189,7 +228,7 @@ const track=document.getElementById("testiTrack");
 const prev=document.getElementById("testiPrev");
 const next=document.getElementById("testiNext");
 if(track&&prev&&next){
-const amt=400;
+const amt=380;
 prev.addEventListener("click",()=>track.scrollBy({left:-amt,behavior:"smooth"}));
 next.addEventListener("click",()=>track.scrollBy({left:amt,behavior:"smooth"}));
 let auto=setInterval(()=>track.scrollBy({left:amt,behavior:"smooth"}),5000);
