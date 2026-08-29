@@ -4,73 +4,80 @@
 {% block content %}
 <section class="section">
 <div class="container container-narrow">
-    <a href="{{ url_for('index') }}" class="small text-muted"><i class="bi bi-arrow-left"></i> Back</a>
-    <span class="eyebrow eyebrow-amber mt-3" style="display:inline-flex">For pharmacies</span>
-    <h1 class="mt-2">List your pharmacy on MediFinder</h1>
-    <p class="text-muted">Submit your details and drug license. Our team verifies documents — usually within 24 hours — and you can start setting up inventory right away.</p>
+    <a href="{{ url_for('index') }}" class="small text-muted"><i class="bi bi-arrow-left"></i> Back to home</a>
+    <div class="dashboard-hero mt-3" data-motion="register-hero">
+        <span class="eyebrow eyebrow-amber" style="display:inline-flex">For pharmacies</span>
+        <h1 class="mt-2">List your pharmacy on MediFinder</h1>
+        <p class="text-muted mb-0">Submit your store details and drug licence. Our team reviews documents, usually within 24 hours, while you prepare inventory.</p>
+        <div class="kpi-strip">
+            <div class="kpi-mini"><strong>01</strong><span>Store details</span></div>
+            <div class="kpi-mini"><strong>02</strong><span>Licence upload</span></div>
+            <div class="kpi-mini"><strong>03</strong><span>Inventory setup</span></div>
+        </div>
+    </div>
 
-    <form method="POST" enctype="multipart/form-data" class="card mt-4" style="padding:2rem" id="regForm">
+    <form method="POST" enctype="multipart/form-data" class="card mt-4" style="padding:2rem" id="regForm" data-motion="register-form">
         <h3 style="font-size:1.1rem" class="mb-3"><i class="bi bi-shop text-teal"></i> Store details</h3>
         <div class="row" style="gap:0">
             <div style="flex:1 1 48%">
-                <label class="form-label">Shop / pharmacy name *</label>
-                <input type="text" name="name" class="form-control" required value="{{ request.form.name }}">
+                <label class="form-label">Shop or pharmacy name <span class="req">required</span></label>
+                <input type="text" name="name" class="form-control" required value="{{ request.form.get('name','') }}">
             </div>
             <div style="flex:1 1 48%">
                 <label class="form-label">Owner / pharmacist name</label>
-                <input type="text" name="owner_name" class="form-control" value="{{ request.form.owner_name }}">
+                <input type="text" name="owner_name" class="form-control" value="{{ request.form.get('owner_name','') }}">
             </div>
         </div>
         <div class="row mt-3" style="gap:0">
             <div style="flex:1 1 48%">
                 <label class="form-label">Email</label>
-                <input type="email" name="email" class="form-control" value="{{ request.form.email }}">
+                <input type="email" name="email" class="form-control" value="{{ request.form.get('email','') }}">
             </div>
             <div style="flex:1 1 48%">
                 <label class="form-label">Phone</label>
-                <input type="tel" name="phone" class="form-control" value="{{ request.form.phone }}">
+                <input type="tel" name="phone" class="form-control" value="{{ request.form.get('phone','') }}">
             </div>
         </div>
 
         <label class="form-label mt-3">Description</label>
-        <textarea name="description" class="form-control" rows="2" placeholder="A short line about your pharmacy, specialities, services...">{{ request.form.description }}</textarea>
+        <textarea name="description" class="form-control" rows="2" placeholder="A short line about your pharmacy, specialties and services">{{ request.form.get('description','') }}</textarea>
 
         <h3 class="mt-4 mb-3" style="font-size:1.1rem"><i class="bi bi-geo-alt text-teal"></i> Address</h3>
-        <label class="form-label">Street / building</label>
-        <input type="text" name="address" class="form-control" value="{{ request.form.address }}">
+        <label class="form-label">Street or building</label>
+        <input type="text" name="address" class="form-control" value="{{ request.form.get('address','') }}">
         <div class="row mt-3" style="gap:0">
-            <div style="flex:1 1 30%"><label class="form-label">City *</label><input type="text" name="city" class="form-control" required value="{{ request.form.city }}"></div>
-            <div style="flex:1 1 30%"><label class="form-label">State</label><input type="text" name="state" class="form-control" value="{{ request.form.state }}"></div>
-            <div style="flex:1 1 30%"><label class="form-label">Pincode</label><input type="text" name="pincode" class="form-control" value="{{ request.form.pincode }}"></div>
+            <div style="flex:1 1 30%"><label class="form-label">City <span class="req">required</span></label><input type="text" name="city" class="form-control" required value="{{ request.form.get('city','') }}"></div>
+            <div style="flex:1 1 30%"><label class="form-label">State</label><input type="text" name="state" class="form-control" value="{{ request.form.get('state','') }}"></div>
+            <div style="flex:1 1 30%"><label class="form-label">PIN code</label><input type="text" name="pincode" class="form-control" value="{{ request.form.get('pincode','') }}"></div>
         </div>
 
-        <h3 class="mt-4 mb-3" style="font-size:1.1rem"><i class="bi bi-shield-check text-teal"></i> License &amp; verification</h3>
-        <label class="form-label">Drug license number *</label>
-        <input type="text" name="license_number" class="form-control" required placeholder="DL-XX-XXXXXXXX" value="{{ request.form.license_number }}">
+        <h3 class="mt-4 mb-3" style="font-size:1.1rem"><i class="bi bi-shield-check text-teal"></i> Licence &amp; verification</h3>
+        <label class="form-label">Drug licence number <span class="req">required</span></label>
+        <input type="text" name="license_number" class="form-control" required placeholder="DL-XX-XXXXXXXX" value="{{ request.form.get('license_number','') }}">
         <div class="row mt-3" style="gap:0">
             <div style="flex:1 1 48%">
-                <label class="form-label">License image *</label>
+                <label class="form-label">Licence image <span class="req">required</span></label>
                 <input type="file" name="license_image" accept="image/*" class="form-control" required>
-                <div class="form-hint">A clear photo of your drug license certificate.</div>
+                <div class="form-hint">Upload a clear photo of your drug licence certificate.</div>
             </div>
             <div style="flex:1 1 48%">
-                <label class="form-label">Shop front photo *</label>
+                <label class="form-label">Shopfront photo <span class="req">required</span></label>
                 <input type="file" name="shop_photo" accept="image/*" class="form-control" required>
-                <div class="form-hint">Helps customers recognise your store.</div>
+                <div class="form-hint">This helps customers recognise your store.</div>
             </div>
         </div>
         <label class="form-label mt-3">GST certificate (optional)</label>
         <input type="file" name="gst_certificate" accept="image/*,.pdf" class="form-control">
 
-        <h3 class="mt-4 mb-3" style="font-size:1.1rem"><i class="bi bi-lock text-teal"></i> Account password *</h3>
+        <h3 class="mt-4 mb-3" style="font-size:1.1rem"><i class="bi bi-lock text-teal"></i> Account password <span class="req">required</span></h3>
         <input type="password" name="password" class="form-control" required minlength="6" placeholder="At least 6 characters">
 
         <div class="form-check mt-3">
             <input type="checkbox" id="agree" required>
-            <label for="agree" class="small text-muted">I confirm I am authorised to represent this pharmacy and the license details are accurate.</label>
+            <label for="agree" class="small text-muted">I confirm I am authorised to represent this pharmacy and the licence details are accurate.</label>
         </div>
 
-        <button class="btn btn-primary btn-block btn-lg mt-4"><i class="bi bi-send-check"></i> Submit for verification</button>
+        <button class="btn btn-primary btn-block btn-lg mt-4"><i class="bi bi-send-check"></i> Submit for review</button>
         <p class="small text-muted text-center mt-3 mb-0">Already registered? <a href="{{ url_for('shop_login') }}">Sign in</a></p>
     </form>
 </div>

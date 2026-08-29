@@ -14,16 +14,16 @@
             MediFinder
         </a>
         <div>
-            <h2>Your medicine cabinet, organised.</h2>
-            <p>Save the medicines you take, track reservations, and get back to the pharmacy that had what you needed.</p>
+            <h2>Your medicines, organised.</h2>
+            <p>Save medicines you use often, track pickup holds, and return to pharmacies that had what you needed.</p>
             <ul class="auth-points">
-                <li><i class="bi bi-bookmark-check-fill"></i> Save regular medicines for one-tap re-search</li>
+                <li><i class="bi bi-bookmark-check-fill"></i> Save regular medicines for faster repeat searches</li>
                 <li><i class="bi bi-bag-check-fill"></i> Track every 2-hour hold and pickup status</li>
                 <li><i class="bi bi-star-fill"></i> Review pharmacies and help your neighbours</li>
             </ul>
         </div>
         <div class="small" style="color:rgba(255,255,255,.55)">
-            <i class="bi bi-shield-lock"></i> We never share your phone. It's only visible to a pharmacy when you reserve.
+            <i class="bi bi-shield-lock"></i> Your phone number is shared only with a pharmacy when you place a pickup hold.
         </div>
     </aside>
 
@@ -32,25 +32,25 @@
             {% if mode == 'register' %}
             <span class="eyebrow eyebrow-amber">Join MediFinder</span>
             <h1 class="mt-3" style="font-size:1.8rem">Create your account</h1>
-            <p class="text-muted">Free forever for patients. No spam, no medical advice.</p>
+            <p class="text-muted">Free forever for patients. No spam. No medical advice. Just easier access to local availability.</p>
 
             <form method="POST" class="mt-4">
                 <div class="mb-3">
                     <label class="form-label">Full name</label>
-                    <input type="text" name="name" class="form-control" placeholder="Your name" required value="{{ request.form.name }}">
+                    <input type="text" name="name" class="form-control" placeholder="Your name" required value="{{ request.form.get('name','') }}">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required value="{{ request.form.email }}">
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required value="{{ request.form.get('email','') }}">
                 </div>
                 <div class="row" style="gap:.75rem">
                     <div style="flex:1">
                         <label class="form-label">Phone (optional)</label>
-                        <input type="tel" name="phone" class="form-control" placeholder="+91 ..." value="{{ request.form.phone }}">
+                        <input type="tel" name="phone" class="form-control" placeholder="+91 90000 00000" value="{{ request.form.get('phone','') }}">
                     </div>
                     <div style="flex:1">
                         <label class="form-label">City (optional)</label>
-                        <input type="text" name="city" class="form-control" placeholder="Patna" value="{{ request.form.city }}">
+                        <input type="text" name="city" class="form-control" placeholder="Patna" value="{{ request.form.get('city','') }}">
                     </div>
                 </div>
                 <div class="mb-3 mt-3">
@@ -60,7 +60,7 @@
                 <button class="btn btn-primary btn-block btn-lg"><i class="bi bi-person-plus"></i> Create account</button>
             </form>
 
-            <div class="hr-sect">already have one?</div>
+            <div class="hr-sect">Already have an account?</div>
             <a href="{{ url_for('customer_login') }}" class="btn btn-outline btn-block">Sign in instead</a>
             {% else %}
             <span class="eyebrow">Welcome back</span>
@@ -70,7 +70,7 @@
             <form method="POST" class="mt-4">
                 <div class="mb-3">
                     <label class="form-label">Email</label>
-                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required value="{{ request.form.email }}">
+                    <input type="email" name="email" class="form-control" placeholder="you@example.com" required value="{{ request.form.get('email','') }}">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Password</label>
@@ -79,12 +79,12 @@
                 <button class="btn btn-primary btn-block btn-lg"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
             </form>
 
-            <div class="card mt-4" style="padding:1rem;background:var(--ink-50);border-style:dashed">
+            <div class="card mt-4" style="padding:1rem;background:var(--surface-subtle);border-style:dashed">
                 <strong class="small"><i class="bi bi-info-circle text-teal"></i> Demo account</strong>
                 <div class="small mono text-muted mt-1">demo@medifinder.app / demo1234</div>
             </div>
 
-            <div class="hr-sect">new here?</div>
+            <div class="hr-sect">New here?</div>
             <a href="{{ url_for('customer_register') }}" class="btn btn-amber btn-block">Create free account</a>
             {% endif %}
 

@@ -1,48 +1,67 @@
 {% extends "base.html" %}
-{% block title %}My account — MediFinder{% endblock %}
+{% block title %}My medicines — MediFinder{% endblock %}
 
 {% block content %}
 <section class="section-tight" style="padding-top:1.5rem">
 <div class="container">
-    <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
-        <div class="flex gap-3 center">
-            <div style="width:56px;height:56px;border-radius:50%;background:var(--teal-700);color:#fff;display:grid;place-items:center;font-size:1.4rem;font-family:var(--font-display)">
-                {{ current_customer.name[0]|upper }}
+    <div class="account-hero" data-motion="account-hero">
+        <div class="flex between center" style="flex-wrap:wrap;gap:1rem">
+            <div class="flex gap-3 center">
+                <div class="account-avatar">{{ current_customer.name[0]|upper }}</div>
+                <div>
+                    <span class="eyebrow"><i class="bi bi-person-heart"></i> My medicines</span>
+                    <h1 class="mt-2 mb-0" style="font-size:clamp(1.8rem,4vw,2.8rem)">{{ current_customer.name }}</h1>
+                    <p class="text-muted small mb-0">{{ current_customer.email }} · {{ current_customer.city or 'Location not set' }}</p>
+                </div>
             </div>
-            <div>
-                <h1 class="mb-0" style="font-size:1.6rem">{{ current_customer.name }}</h1>
-                <p class="text-muted small mb-0">{{ current_customer.email }} · {{ current_customer.city or 'City not set' }}</p>
+            <div class="flex gap-2" style="flex-wrap:wrap">
+                <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Find medicine</a>
+                <a href="{{ url_for('prescription_upload') }}" class="btn btn-outline btn-sm"><i class="bi bi-file-earmark-medical"></i> Upload prescription</a>
+                <a href="{{ url_for('customer_logout') }}" class="btn btn-ghost btn-sm"><i class="bi bi-box-arrow-right"></i> Sign out</a>
             </div>
         </div>
-        <a href="{{ url_for('customer_logout') }}" class="btn btn-outline btn-sm"><i class="bi bi-box-arrow-right"></i> Sign out</a>
+        <div class="kpi-strip">
+            <div class="kpi-mini"><strong>{{ (reservations|selectattr('status','equalto','Pending')|list|length) + (reservations|selectattr('status','equalto','Confirmed')|list|length) }}</strong><span>Active holds</span></div>
+            <div class="kpi-mini"><strong>{{ favourites|length }}</strong><span>Saved medicines</span></div>
+            <div class="kpi-mini"><strong>{{ prescription_requests|length }}</strong><span>Prescription uploads</span></div>
+            <div class="kpi-mini"><strong>{{ reviews|length }}</strong><span>Reviews</span></div>
+        </div>
     </div>
 
     <div class="dash">
         <aside class="dash-side">
-            <a href="#reservations" class="active"><i class="bi bi-bag-check"></i> My reservations</a>
+            <a href="#reservations" class="active"><i class="bi bi-bag-check"></i> Active holds</a>
+            <a href="#prescriptions"><i class="bi bi-file-earmark-medical"></i> Prescriptions</a>
             <a href="#favourites"><i class="bi bi-bookmark-heart"></i> Saved medicines</a>
-            <a href="#reviews"><i class="bi bi-star"></i> My reviews</a>
+            <a href="#reviews"><i class="bi bi-star"></i> Reviews</a>
             <a href="{{ url_for('search_page') }}"><i class="bi bi-search"></i> Find medicine</a>
         </aside>
 
         <main>
-            <!-- Reservations -->
-            <section id="reservations" class="card mb-4" style="padding:1.5rem">
-                <h2 style="font-size:1.25rem"><i class="bi bi-bag-check text-teal"></i> Reservations</h2>
-                <p class="text-muted small">Your 2-hour holds and pickup history.</p>
+            <section id="reservations" class="card mb-4" style="padding:1.5rem" data-motion="account-reservations">
+                <div class="flex between center" style="gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+                    <div>
+                        <h2 style="font-size:1.25rem" class="mb-1"><i class="bi bi-bag-check text-teal"></i> Pickup holds</h2>
+                        <p class="text-muted small mb-0">Pending and confirmed reservations stay available for the pickup window shown below.</p>
+                    </div>
+                    <a href="{{ url_for('search_page') }}" class="btn btn-outline btn-sm"><i class="bi bi-plus-circle"></i> New hold</a>
+                </div>
                 <div class="table-wrap">
                     <table class="tbl">
-                        <thead><tr><th>Medicine</th><th>Pharmacy</th><th>Qty</th><th>Date</th><th>Status</th><th></th></tr></thead>
+                        <thead><tr><th>Medicine</th><th>Pharmacy</th><th>Quantity</th><th>Status</th><th>Hold window</th><th></th></tr></thead>
                         <tbody>
                         {% for r in reservations %}
                         <tr>
-                            <td><strong>{{ r.med_name }}</strong><div class="small text-muted">{{ r.dosage or '' }}</div></td>
+                            <td><strong>{{ r.med_name }}</strong><div class="small text-muted">{{ r.dosage or 'Strength not listed' }}</div></td>
                             <td>
+                                {% if r.shop_status == 'Verified' %}
                                 <a href="{{ url_for('shop_profile', shop_id=r.shop_id) }}">{{ r.shop_name }}</a>
+                                {% else %}
+                                <span>{{ r.shop_name }}</span>
+                                {% endif %}
                                 <div class="small text-muted">{{ r.shop_city or '' }}</div>
                             </td>
                             <td>{{ r.quantity }}</td>
-                            <td class="small">{{ r.created_at[:16] }}</td>
                             <td>
                                 {% if r.status == 'Pending' %}<span class="badge badge-amber">Pending</span>
                                 {% elif r.status == 'Confirmed' %}<span class="badge badge-teal">Confirmed</span>
@@ -50,54 +69,98 @@
                                 {% elif r.status == 'Cancelled' %}<span class="badge badge-gray">Cancelled</span>
                                 {% else %}<span class="badge badge-red">Expired</span>{% endif %}
                             </td>
+                            <td class="small">
+                                <div>{{ r.created_at[:16] }}</div>
+                                {% if r.status in ['Pending','Confirmed'] and r.held_until %}
+                                <span class="hold-countdown" data-held-until="{{ r.held_until }}">Checking hold time…</span>
+                                {% else %}
+                                <span class="text-muted">{{ r.held_until[:16] if r.held_until else '—' }}</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if r.status in ['Pending','Confirmed'] %}
                                 <form method="POST" action="{{ url_for('cancel_reservation', rid=r.id) }}" data-confirm="Cancel this reservation?">
-                                    <button class="btn btn-ghost btn-sm text-danger"><i class="bi bi-x-circle"></i></button>
+                                    <button class="btn btn-ghost btn-sm text-danger"><i class="bi bi-x-circle"></i> Cancel</button>
                                 </form>
                                 {% endif %}
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="empty"><i class="bi bi-bag"></i> No reservations yet. <a href="{{ url_for('search_page') }}">Find medicine →</a></td></tr>
+                        <tr><td colspan="6" class="empty"><i class="bi bi-bag"></i> No pickup holds yet. <a href="{{ url_for('search_page') }}">Find medicine</a></td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </section>
 
-            <!-- Favourites -->
-            <section id="favourites" class="card mb-4" style="padding:1.5rem">
-                <h2 style="font-size:1.25rem"><i class="bi bi-bookmark-heart text-amber"></i> Saved medicines</h2>
-                <p class="text-muted small">Quick re-search for the medicines you take regularly.</p>
-                {% if favourites %}
-                <div class="chips" style="gap:.6rem">
-                    {% for f in favourites %}
-                    <span class="chip" style="padding:.6rem 1rem">
-                        <a href="{{ url_for('search_page', q=f.med_name) }}" style="color:inherit">
-                            <i class="bi bi-capsule-pill text-teal"></i> {{ f.med_name }}
-                            {% if f.salt %}<small class="text-muted d-block">{{ f.salt }}</small>{% endif %}
-                        </a>
-                        <form method="POST" action="{{ url_for('favourites_api') }}" style="display:inline" data-api-delete="{{ f.id }}">
-                            <button type="submit" class="btn-ghost" style="border:0;background:none;cursor:pointer;color:var(--ink-300);padding:0 .3rem" title="Remove">
-                                <i class="bi bi-x"></i>
-                            </button>
-                        </form>
-                    </span>
+            <section id="prescriptions" class="card mb-4" style="padding:1.5rem" data-motion="account-prescriptions">
+                <div class="flex between center" style="gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+                    <div>
+                        <h2 style="font-size:1.25rem" class="mb-1"><i class="bi bi-file-earmark-medical text-teal"></i> Prescription uploads</h2>
+                        <p class="text-muted small mb-0">Uploaded prescriptions are reviewed before medicines are matched to local pharmacies.</p>
+                    </div>
+                    <a href="{{ url_for('prescription_upload') }}" class="btn btn-primary btn-sm"><i class="bi bi-upload"></i> Upload prescription</a>
+                </div>
+                {% if prescription_requests %}
+                <div class="ops-list">
+                    {% for p in prescription_requests %}
+                    <div class="ops-item prescription-item">
+                        <div>
+                            <strong>Request #{{ p.id }} · {{ p.city or 'Location not set' }}</strong>
+                            <small>{{ p.created_at[:16] }}{% if p.note %} · {{ p.note[:80] }}{% endif %}</small>
+                        </div>
+                        <div class="flex gap-2 center" style="flex-wrap:wrap;justify-content:flex-end">
+                            {% if p.prescription_file %}<a class="btn btn-ghost btn-sm" href="{{ url_for('serve_upload', filename=p.prescription_file) }}" target="_blank" rel="noopener"><i class="bi bi-eye"></i> View</a>{% endif %}
+                            {% if p.status == 'Submitted' %}<span class="badge badge-amber">Submitted</span>
+                            {% elif p.status == 'Reviewing' %}<span class="badge badge-teal">Reviewing</span>
+                            {% elif p.status == 'Matched' %}<span class="badge badge-green">Matched</span>
+                            {% else %}<span class="badge badge-gray">{{ p.status }}</span>{% endif %}
+                        </div>
+                    </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="empty"><i class="bi bi-bookmark"></i> No saved medicines yet. Tap the bookmark on any search result.</div>
+                <div class="empty"><i class="bi bi-file-earmark-medical"></i> No prescription uploads yet. Upload a clear image or PDF when you need pharmacist review.</div>
                 {% endif %}
             </section>
 
-            <!-- Reviews -->
-            <section id="reviews" class="card" style="padding:1.5rem">
-                <h2 style="font-size:1.25rem"><i class="bi bi-star text-amber"></i> Your reviews</h2>
+            <section id="favourites" class="card mb-4" style="padding:1.5rem" data-motion="account-favourites">
+                <div class="flex between center" style="gap:1rem;flex-wrap:wrap;margin-bottom:.75rem">
+                    <div>
+                        <h2 style="font-size:1.25rem" class="mb-1"><i class="bi bi-bookmark-heart text-amber"></i> Saved medicines</h2>
+                        <p class="text-muted small mb-0">Quickly search again for medicines you use regularly.</p>
+                    </div>
+                </div>
+                {% if favourites %}
+                <div class="medication-grid">
+                    {% for f in favourites %}
+                    <div class="medication-card">
+                        <div><strong>{{ f.med_name }}</strong>{% if f.salt %}<small>{{ f.salt }}</small>{% endif %}</div>
+                        <div class="flex gap-2 center">
+                            <a href="{{ url_for('search_page', q=f.med_name) }}" class="btn btn-outline btn-sm"><i class="bi bi-search"></i> Search</a>
+                            <form method="POST" action="{{ url_for('favourites_api') }}" data-api-delete="{{ f.id }}" data-confirm="Remove this saved medicine?">
+                                <input type="hidden" name="id" value="{{ f.id }}">
+                                <button type="submit" class="btn btn-ghost btn-sm" title="Remove"><i class="bi bi-x"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty"><i class="bi bi-bookmark"></i> No saved medicines yet. Use the bookmark on any search result to save one.</div>
+                {% endif %}
+            </section>
+
+            <section id="reviews" class="card" style="padding:1.5rem" data-motion="account-reviews">
+                <h2 style="font-size:1.25rem"><i class="bi bi-star text-amber"></i> Pharmacy reviews</h2>
                 {% for rv in reviews %}
                 <div class="review">
                     <div class="review-head">
+                        {% if rv.shop_status == 'Verified' %}
                         <a href="{{ url_for('shop_profile', shop_id=rv.shop_id) }}"><strong>{{ rv.shop_name }}</strong></a>
+                        {% else %}
+                        <strong>{{ rv.shop_name }}</strong>
+                        {% endif %}
                         <small class="text-muted">{{ rv.created_at[:10] }}</small>
                     </div>
                     <div class="stars">{{ '★'*rv.rating }}{{ '☆'*(5-rv.rating) }}</div>
@@ -123,15 +186,6 @@ document.querySelectorAll(".dash-side a").forEach(a=>{
             document.querySelectorAll(".dash-side a").forEach(x=>x.classList.remove("active"));
             a.classList.add("active");
         }
-    });
-});
-// Delete favourite via API (progressive enhancement)
-document.querySelectorAll("[data-api-delete]").forEach(form=>{
-    form.addEventListener("submit", async e=>{
-        e.preventDefault();
-        await fetch("/api/favourites", {method:"DELETE", headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({ id: +form.dataset.apiDelete })});
-        form.closest(".chip").remove();
     });
 });
 </script>

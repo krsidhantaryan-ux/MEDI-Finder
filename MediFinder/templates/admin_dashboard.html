@@ -2,26 +2,33 @@
 {% block title %}Admin dashboard — MediFinder{% endblock %}
 
 {% block content %}
+{% macro admin_token_field() -%}
+    {% if admin_token %}<input type="hidden" name="admin_token" value="{{ admin_token }}">{% endif %}
+{%- endmacro %}
 <section class="section-tight" style="padding-top:1.5rem">
 <div class="container">
-    <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
-        <div>
-            <span class="eyebrow"><i class="bi bi-shield-lock"></i> Admin console</span>
-            <h1 class="mt-2 mb-0" style="font-size:1.7rem">Network overview</h1>
-        </div>
-        <div class="flex gap-2">
-            <a href="{{ url_for('index') }}" class="btn btn-outline btn-sm"><i class="bi bi-house"></i> Public site</a>
-            <a href="{{ url_for('admin_logout') }}" class="btn btn-danger btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+    <div class="admin-hero" data-motion="admin-hero">
+        <div class="flex between center" style="flex-wrap:wrap;gap:1rem">
+            <div>
+                <span class="eyebrow"><i class="bi bi-shield-lock"></i> Admin console</span>
+                <h1 class="mt-2 mb-0" style="font-size:clamp(1.9rem,4vw,3.2rem)">Local pharmacy operations</h1>
+                <p class="text-muted mb-0 small">Verify pharmacies, review prescription requests and keep local search trustworthy.</p>
+            </div>
+            <div class="flex gap-2" style="flex-wrap:wrap">
+                <a href="{{ url_for('index') }}" class="btn btn-outline btn-sm"><i class="bi bi-house"></i> Public site</a>
+                <a href="{{ url_for('admin_logout', admin_token=admin_token) if admin_token else url_for('admin_logout') }}" class="btn btn-danger btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            </div>
         </div>
     </div>
 
     <div class="dash-stats">
         <div class="dash-stat"><i class="bi bi-shop ic"></i><div class="v">{{ stats.shops }}</div><div class="l">Total pharmacies</div></div>
-        <div class="dash-stat"><i class="bi bi-patch-check ic" style="color:var(--green-600)"></i><div class="v">{{ stats.verified }}</div><div class="l">Verified</div></div>
-        <div class="dash-stat"><i class="bi bi-hourglass-split ic" style="color:var(--amber-500)"></i><div class="v">{{ stats.pending }}</div><div class="l">Pending review</div></div>
+        <div class="dash-stat"><i class="bi bi-patch-check ic" style="color:var(--green)"></i><div class="v">{{ stats.verified }}</div><div class="l">Verified</div></div>
+        <div class="dash-stat"><i class="bi bi-hourglass-split ic" style="color:var(--amber)"></i><div class="v">{{ stats.pending }}</div><div class="l">Pending review</div></div>
         <div class="dash-stat"><i class="bi bi-people ic"></i><div class="v">{{ stats.customers }}</div><div class="l">Customers</div></div>
         <div class="dash-stat"><i class="bi bi-box-seam ic"></i><div class="v">{{ stats.inventory }}</div><div class="l">Inventory items</div></div>
         <div class="dash-stat"><i class="bi bi-bag-check ic"></i><div class="v">{{ stats.reservations }}</div><div class="l">Reservations</div></div>
+        <div class="dash-stat"><i class="bi bi-file-earmark-medical ic"></i><div class="v">{{ stats.prescriptions }}</div><div class="l">Prescription requests</div></div>
         <div class="dash-stat"><i class="bi bi-star ic"></i><div class="v">{{ stats.reviews }}</div><div class="l">Reviews</div></div>
     </div>
 
@@ -30,10 +37,10 @@
         <div style="flex:2 1 480px;display:flex;flex-direction:column;gap:1.5rem">
             <!-- Pending -->
             <div class="card" style="padding:1.5rem">
-                <h2 style="font-size:1.2rem"><i class="bi bi-hourglass-split text-amber"></i> Pending verification ({{ pending|length }})</h2>
+                <h2 style="font-size:1.2rem"><i class="bi bi-hourglass-split text-amber"></i> Pending pharmacy reviews ({{ pending|length }})</h2>
                 <div class="table-wrap mt-3">
                     <table class="tbl">
-                        <thead><tr><th>Pharmacy</th><th>License</th><th>Location</th><th>Documents</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Pharmacy</th><th>Licence</th><th>Location</th><th>Documents</th><th>Action</th></tr></thead>
                         <tbody>
                         {% for s in pending %}
                         <tr>
@@ -45,7 +52,7 @@
                             <td class="small">{{ s.city or '—' }}</td>
                             <td>
                                 <div class="flex gap-2" style="flex-wrap:wrap">
-                                    {% if s.license_image %}<a href="{{ url_for('serve_upload', filename=s.license_image) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-file-image"></i> License</a>{% endif %}
+                                    {% if s.license_image %}<a href="{{ url_for('serve_upload', filename=s.license_image) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-file-image"></i> Licence</a>{% endif %}
                                     {% if s.shop_photo %}<a href="{{ url_for('serve_upload', filename=s.shop_photo) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-shop"></i> Photo</a>{% endif %}
                                     {% if s.gst_certificate %}<a href="{{ url_for('serve_upload', filename=s.gst_certificate) }}" target="_blank" class="btn btn-outline btn-sm"><i class="bi bi-file-earmark-pdf"></i> GST</a>{% endif %}
                                 </div>
@@ -53,17 +60,19 @@
                             <td>
                                 <div class="flex gap-2">
                                     <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='approve') }}">
-                                        <button class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i></button>
+                                        {{ admin_token_field() }}
+                                        <button class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i> Approve</button>
                                     </form>
                                     <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='reject') }}" onsubmit="this.querySelector('[name=note]').value=prompt('Reason for rejection (optional):')||''">
+                                        {{ admin_token_field() }}
                                         <input type="hidden" name="note">
-                                        <button class="btn btn-danger btn-sm"><i class="bi bi-x-lg"></i></button>
+                                        <button class="btn btn-danger btn-sm"><i class="bi bi-x-lg"></i> Reject</button>
                                     </form>
                                 </div>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="empty"><i class="bi bi-check2-all"></i> All caught up — no pending verifications.</td></tr>
+                        <tr><td colspan="5" class="empty"><i class="bi bi-check2-all"></i> All caught up. No pharmacy reviews are pending.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -85,10 +94,12 @@
                             <td class="small">{{ s.phone or s.email or '—' }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='suspend') }}" data-confirm="Suspend this pharmacy? It will be hidden from public search." style="display:inline">
+                                    {{ admin_token_field() }}
                                     <button class="btn btn-ghost btn-sm text-amber"><i class="bi bi-pause-circle"></i> Suspend</button>
                                 </form>
                                 <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='delete') }}" data-confirm="PERMANENTLY delete this pharmacy and all its inventory?" style="display:inline">
-                                    <button class="btn btn-ghost btn-sm text-danger"><i class="bi bi-trash"></i></button>
+                                    {{ admin_token_field() }}
+                                    <button class="btn btn-ghost btn-sm text-danger" aria-label="Delete pharmacy"><i class="bi bi-trash"></i></button>
                                 </form>
                             </td>
                         </tr>
@@ -103,15 +114,17 @@
                 <h2 style="font-size:1.2rem"><i class="bi bi-x-circle-fill text-danger"></i> Rejected / suspended ({{ rejected|length }})</h2>
                 <div class="table-wrap mt-3">
                     <table class="tbl">
-                        <thead><tr><th>Name</th><th>License</th><th>Note</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Name</th><th>Status</th><th>Licence</th><th>Note</th><th>Action</th></tr></thead>
                         <tbody>
                         {% for s in rejected %}
                         <tr>
                             <td><strong>{{ s.name }}</strong><div class="small text-muted">{{ s.city or '' }}</div></td>
+                            <td><span class="badge badge-red">{{ s.status }}</span></td>
                             <td class="mono small">{{ s.license_number or '—' }}</td>
                             <td class="small text-muted">{{ s.rejection_note or '—' }}</td>
                             <td>
                                 <form method="POST" action="{{ url_for('admin_shop_action', shop_id=s.id, action='reinstate') }}">
+                                    {{ admin_token_field() }}
                                     <button class="btn btn-outline btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reinstate</button>
                                 </form>
                             </td>
@@ -126,6 +139,33 @@
 
         <!-- Right column -->
         <div style="flex:1 1 280px;display:flex;flex-direction:column;gap:1.5rem">
+            <div class="card" style="padding:1.5rem">
+                <h3 style="font-size:1rem"><i class="bi bi-file-earmark-medical text-teal"></i> Prescription review queue</h3>
+                <div class="mt-3" style="display:flex;flex-direction:column;gap:.75rem">
+                    {% for p in prescription_requests %}
+                    <div style="padding-bottom:.75rem;border-bottom:1px solid var(--line)">
+                        <div class="flex between center" style="gap:.75rem">
+                            <strong style="font-size:.9rem">Request #{{ p.id }}</strong>
+                            {% if p.status == 'Submitted' %}<span class="badge badge-amber">Submitted</span>
+                            {% elif p.status == 'Reviewing' %}<span class="badge badge-teal">Reviewing</span>
+                            {% elif p.status == 'Matched' %}<span class="badge badge-green">Matched</span>
+                            {% else %}<span class="badge badge-gray">{{ p.status }}</span>{% endif %}
+                        </div>
+                        <div class="small text-muted">{{ p.customer_name or 'Customer' }} · {{ p.customer_phone }} · {{ p.city or 'Location not set' }}</div>
+                        {% if p.note %}<div class="small text-muted" style="margin-top:.25rem">{{ p.note[:100] }}</div>{% endif %}
+                        <div class="flex gap-2 mt-2" style="flex-wrap:wrap">
+                            {% if p.prescription_file %}<a class="btn btn-outline btn-sm" href="{{ url_for('serve_upload', filename=p.prescription_file) }}" target="_blank" rel="noopener"><i class="bi bi-eye"></i> View</a>{% endif %}
+                            <form method="POST" action="{{ url_for('admin_prescription_action', request_id=p.id, action='review') }}">{{ admin_token_field() }}<button class="btn btn-ghost btn-sm"><i class="bi bi-hourglass-split"></i> Review</button></form>
+                            <form method="POST" action="{{ url_for('admin_prescription_action', request_id=p.id, action='match') }}">{{ admin_token_field() }}<button class="btn btn-primary btn-sm"><i class="bi bi-check2"></i> Matched</button></form>
+                            <form method="POST" action="{{ url_for('admin_prescription_action', request_id=p.id, action='close') }}">{{ admin_token_field() }}<button class="btn btn-ghost btn-sm"><i class="bi bi-archive"></i> Close</button></form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="small text-muted">No prescription uploads yet.</p>
+                    {% endfor %}
+                </div>
+            </div>
+
             <div class="card" style="padding:1.5rem">
                 <h3 style="font-size:1rem"><i class="bi bi-activity text-teal"></i> Recent reservations</h3>
                 <div class="mt-3" style="display:flex;flex-direction:column;gap:.75rem">
@@ -152,8 +192,8 @@
                 <div class="mt-3" style="display:flex;flex-direction:column;gap:.5rem;max-height:320px;overflow-y:auto">
                     {% for l in logs %}
                     <div class="small" style="padding-bottom:.5rem;border-bottom:1px dashed var(--line)">
-                        <span class="badge badge-gray">{{ l.actor_type or 'system' }}</span>
-                        <strong>{{ l.action }}</strong>
+                        <span class="badge badge-gray">{{ (l.actor_type or 'system')|title }}</span>
+                        <strong>{{ l.action.replace('_', ' ')|title }}</strong>
                         {% if l.detail %}<div class="text-muted" style="word-break:break-word">{{ l.detail }}</div>{% endif %}
                         <div class="text-muted" style="font-size:.72rem">{{ l.created_at }}</div>
                     </div>

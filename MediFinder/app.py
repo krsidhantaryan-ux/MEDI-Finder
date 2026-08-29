@@ -7,11 +7,17 @@ A complete medicine-availability platform with:
   • Shopkeeper portal: inventory CRUD, location, hours, reservation workflow
   • Admin verification dashboard with stats and audit log
 """
+import json
 import math
 import os
 import re
 from datetime import datetime, timedelta
 from functools import wraps
+from hmac import compare_digest
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
+
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from flask import (
     Flask, render_template, request, redirect, session, jsonify,
@@ -29,6 +35,8 @@ from seed import seed_demo_data
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 app = Flask(__name__)
+# Accept both /admin and /admin/ style URLs to avoid route/link edge cases.
+app.url_map.strict_slashes = False
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "medfinder-local-dev-key-change-me"),
     DATABASE=os.environ.get(
@@ -40,11 +48,15 @@ app.config.update(
         os.path.join(BASE_DIR, "static", "uploads"),
     ),
     MAX_CONTENT_LENGTH=8 * 1024 * 1024,  # 8 MB
+    SESSION_COOKIE_NAME="mf_session_v2",
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
 )
-# Secure cookies when served behind HTTPS (production)
-if os.environ.get("FLASK_ENV") == "production" or os.environ.get("RENDER"):
+# Secure cookies when served behind HTTPS (production). The Arena live preview
+# is also HTTPS and often embedded in an iframe, so session cookies need
+# SameSite=None/Secure there; this is adjusted per request below.
+IS_PRODUCTION = os.environ.get("FLASK_ENV") == "production" or bool(os.environ.get("RENDER"))
+if IS_PRODUCTION:
     app.config.update(SESSION_COOKIE_SECURE=True, PREFERRED_URL_SCHEME="https")
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(os.path.dirname(app.config["DATABASE"]) or ".", exist_ok=True)
@@ -54,14 +66,148 @@ ALLOWED_DOC = ALLOWED_IMG | {"pdf"}
 
 ADMIN_USERNAME = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASS", "admin123")
+ADMIN_TOKEN_MAX_AGE = int(os.environ.get("ADMIN_TOKEN_MAX_AGE", "28800"))  # 8 hours
+ACTIVE_ADMIN_TOKENS = set()
 
 # Default map centre (Patna, Bihar) — used before geolocation.
 DEFAULT_CENTER = (25.6110, 85.1430)
+
+# Small offline fallback so manual city searches still move the map if the
+# public geocoding API is temporarily unreachable in local/dev environments.
+KNOWN_CITY_CENTERS = {
+    "patna": (25.6110, 85.1430, "Patna"),
+    "boring road": (25.6148, 85.1125, "Patna"),
+    "delhi": (28.6139, 77.2090, "Delhi"),
+    "new delhi": (28.6139, 77.2090, "New Delhi"),
+    "mumbai": (19.0760, 72.8777, "Mumbai"),
+    "kolkata": (22.5726, 88.3639, "Kolkata"),
+    "bengaluru": (12.9716, 77.5946, "Bengaluru"),
+    "bangalore": (12.9716, 77.5946, "Bengaluru"),
+    "hyderabad": (17.3850, 78.4867, "Hyderabad"),
+    "chennai": (13.0827, 80.2707, "Chennai"),
+    "pune": (18.5204, 73.8567, "Pune"),
+    "lucknow": (26.8467, 80.9462, "Lucknow"),
+    "jaipur": (26.9124, 75.7873, "Jaipur"),
+    "ahmedabad": (23.0225, 72.5714, "Ahmedabad"),
+}
 
 # Reservation hold window
 HOLD_HOURS = 2
 
 app.teardown_appcontext(close_db)
+
+
+def is_preview_request():
+    """Return True for Arena/E2B HTTPS preview requests reaching Flask via proxy."""
+    host = (request.headers.get("X-Forwarded-Host") or request.host or "").lower()
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "").split(",")[0].lower()
+    remote_addr = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
+    loopback_remote = remote_addr in {"127.0.0.1", "::1", "localhost", ""}
+    preview_host = host.endswith(".e2b.app") or ".e2b.app" in host or host.endswith(".arena.ai")
+    arena_proxy_request = os.environ.get("E2B_SANDBOX") == "true" and not loopback_remote
+    return preview_host or proto == "https" or arena_proxy_request
+
+
+@app.before_request
+def configure_session_cookie_for_host():
+    """Keep logins working both on localhost and inside Arena's HTTPS preview.
+
+    Browsers treat the Arena preview as a third-party iframe in some contexts.
+    Flask's default SameSite=Lax cookie is then not sent after login, which
+    looks like the admin login failed. Use iframe-safe cookies only for the
+    HTTPS preview host; keep localhost/dev cookies simple for normal local use.
+    """
+    https_preview = is_preview_request()
+    app.config["SESSION_COOKIE_SAMESITE"] = "None" if https_preview else "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = bool(https_preview or IS_PRODUCTION)
+    # Flask 3 supports CHIPS/Partitioned cookies. It helps embedded previews in
+    # browsers that aggressively block ordinary third-party cookies.
+    if "SESSION_COOKIE_PARTITIONED" in app.config:
+        app.config["SESSION_COOKIE_PARTITIONED"] = bool(https_preview)
+
+
+@app.after_request
+def expire_legacy_cookie_name(response):
+    """Drop stale cookies from the previous default Flask cookie name.
+
+    The app now uses mf_session_v2 so old preview cookies cannot shadow a fresh
+    login during redirects.
+    """
+    if app.config.get("SESSION_COOKIE_NAME") != "session" and "session=" in (request.headers.get("Cookie") or ""):
+        response.delete_cookie("session", path="/")
+    return response
+
+
+def admin_token_serializer():
+    return URLSafeTimedSerializer(app.config["SECRET_KEY"], salt="medifinder-admin-preview-auth")
+
+
+def issue_admin_token(username):
+    """Create a short-lived admin fallback token for cookie-hostile previews."""
+    token = admin_token_serializer().dumps({"role": "admin", "u": username.lower().strip()})
+    ACTIVE_ADMIN_TOKENS.add(token)
+    return token
+
+
+def validate_admin_token(token):
+    """Validate the admin fallback token used only when browser cookies fail."""
+    if not token or token not in ACTIVE_ADMIN_TOKENS:
+        return False
+    try:
+        data = admin_token_serializer().loads(token, max_age=ADMIN_TOKEN_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        ACTIVE_ADMIN_TOKENS.discard(token)
+        return False
+    return data.get("role") == "admin" and compare_digest((data.get("u") or "").lower(), ADMIN_USERNAME.lower())
+
+
+def admin_token_from_request():
+    return (request.args.get("admin_token") or request.form.get("admin_token") or "").strip()
+
+
+def active_admin_token():
+    token = admin_token_from_request()
+    return token if validate_admin_token(token) else ""
+
+
+def admin_dashboard_redirect(token=""):
+    token = token if validate_admin_token(token) else active_admin_token()
+    if token:
+        return redirect(url_for("admin_dashboard", admin_token=token))
+    return redirect(url_for("admin_dashboard"))
+
+
+def safe_redirect_target(target, default_endpoint):
+    """Redirect only to local app paths, never arbitrary external URLs."""
+    target = (target or "").strip()
+    parsed = urlparse(target)
+    if target.startswith("/") and not target.startswith("//") and not parsed.netloc:
+        return redirect(target)
+    return redirect(url_for(default_endpoint))
+
+
+def parse_int(value, default=0, minimum=None, maximum=None):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    if minimum is not None:
+        number = max(minimum, number)
+    if maximum is not None:
+        number = min(maximum, number)
+    return number
+
+
+def parse_float(value, default=0.0, minimum=None, maximum=None):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = default
+    if minimum is not None:
+        number = max(minimum, number)
+    if maximum is not None:
+        number = min(maximum, number)
+    return number
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +224,55 @@ def haversine(lat1, lng1, lat2, lng2):
          + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
          * math.sin(dlng / 2) ** 2)
     return round(R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 2)
+
+
+def public_api_json(url, params=None, timeout=4):
+    """Fetch JSON from a public, keyless API with a clear User-Agent.
+
+    Nominatim/OpenStreetMap asks clients to identify themselves. Network calls
+    are best effort; route handlers always provide a local fallback when this
+    public API is unavailable.
+    """
+    query = f"?{urlencode(params or {})}" if params else ""
+    req = Request(
+        url + query,
+        headers={
+            "User-Agent": "MediFinder local pharmacy finder (demo; contact: medifinder.local)",
+            "Accept": "application/json",
+        },
+    )
+    with urlopen(req, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def city_location_fallback(db, city=""):
+    """Return an approximate local centre from verified shops or Patna default."""
+    if city:
+        term = f"%{city.lower()}%"
+        row = db.execute(
+            "SELECT AVG(lat) AS lat, AVG(lng) AS lng, COALESCE(MAX(city), ?) AS city "
+            "FROM shops WHERE status='Verified' AND lat IS NOT NULL AND lng IS NOT NULL "
+            "AND (LOWER(city) LIKE ? OR LOWER(address) LIKE ? OR LOWER(name) LIKE ?)",
+            (city, term, term, term),
+        ).fetchone()
+        if row and row["lat"] is not None and row["lng"] is not None:
+            return {
+                "lat": row["lat"], "lng": row["lng"],
+                "city": row["city"] or city, "source": "local-pharmacy-average",
+                "approximate": True,
+            }
+    normalized = city.lower().strip()
+    for key, (lat, lng, label) in KNOWN_CITY_CENTERS.items():
+        if normalized and (key in normalized or normalized in key):
+            return {
+                "lat": lat, "lng": lng, "city": label,
+                "source": "known-city-centre", "approximate": True,
+            }
+    return {
+        "lat": DEFAULT_CENTER[0], "lng": DEFAULT_CENTER[1],
+        "city": city or "Patna", "source": "default-city-centre",
+        "approximate": True,
+    }
 
 
 def allowed_file(filename, allowed=ALLOWED_IMG):
@@ -113,24 +308,33 @@ def current_customer():
     cid = session.get("customer_id")
     if not cid:
         return None
-    return get_db().execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
+    customer = get_db().execute("SELECT * FROM customers WHERE id=?", (cid,)).fetchone()
+    if not customer:
+        session.pop("customer_id", None)
+    return customer
 
 
 def current_shop():
     sid = session.get("shop_id")
     if not sid:
         return None
-    return get_db().execute("SELECT * FROM shops WHERE id=?", (sid,)).fetchone()
+    shop = get_db().execute("SELECT * FROM shops WHERE id=?", (sid,)).fetchone()
+    if not shop:
+        session.pop("shop_id", None)
+    return shop
 
 
 def login_customer_required(fn):
     @wraps(fn)
     def wrapper(*a, **kw):
-        if not session.get("customer_id"):
+        customer = current_customer()
+        if not customer:
+            session.pop("customer_id", None)
             if request.path.startswith("/api/"):
                 return jsonify({"ok": False, "error": "Login required"}), 401
             flash("Please sign in to continue.", "warning")
-            return redirect(url_for("customer_login", next=request.path))
+            next_url = (request.full_path or request.path).rstrip("?")
+            return redirect(url_for("customer_login", next=next_url))
         return fn(*a, **kw)
     return wrapper
 
@@ -138,9 +342,18 @@ def login_customer_required(fn):
 def login_shop_required(fn):
     @wraps(fn)
     def wrapper(*a, **kw):
-        if not session.get("shop_id"):
-            if request.path.startswith("/api/"):
-                return jsonify({"ok": False, "error": "Shop login required"}), 401
+        shop = current_shop()
+        if not shop:
+            session.pop("shop_id", None)
+            if request.path.startswith("/api/") or request.is_json:
+                return jsonify({"ok": False, "error": "Pharmacy login required"}), 401
+            flash("Please sign in as a pharmacy.", "warning")
+            return redirect(url_for("shop_login"))
+        if shop["status"] == "Suspended":
+            session.pop("shop_id", None)
+            if request.path.startswith("/api/") or request.is_json:
+                return jsonify({"ok": False, "error": "Pharmacy account is suspended"}), 403
+            flash("This pharmacy account is suspended. Contact admin support.", "danger")
             return redirect(url_for("shop_login"))
         return fn(*a, **kw)
     return wrapper
@@ -149,10 +362,15 @@ def login_shop_required(fn):
 def admin_required(fn):
     @wraps(fn)
     def wrapper(*a, **kw):
-        if not session.get("admin"):
+        token = active_admin_token()
+        if not session.get("admin") and not token:
             if request.path.startswith("/api/"):
                 return jsonify({"ok": False, "error": "Admin required"}), 401
             return redirect(url_for("admin"))
+        if token and not session.get("admin"):
+            # Rehydrate the cookie session when the browser accepts cookies, but
+            # still allow the token path when the preview blocks them entirely.
+            session["admin"] = True
         return fn(*a, **kw)
     return wrapper
 
@@ -166,7 +384,10 @@ def is_open_now(shop):
     now = datetime.now().strftime("%H:%M")
     o = shop["open_time"] or "09:00"
     c = shop["close_time"] or "21:00"
-    return o <= now < c
+    if o <= c:
+        return o <= now < c
+    # Overnight schedule, for example 20:00–02:00.
+    return now >= o or now < c
 
 
 def shop_rating(db, shop_id):
@@ -196,11 +417,13 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # ---------------------------------------------------------------------------
 @app.context_processor
 def inject_globals():
+    token = active_admin_token()
     return {
         "current_customer": current_customer(),
         "current_shop": current_shop(),
         "current_year": datetime.now().year,
-        "is_admin": bool(session.get("admin")),
+        "is_admin": bool(session.get("admin")) or bool(token),
+        "admin_token": token,
         "DEFAULT_LAT": DEFAULT_CENTER[0],
         "DEFAULT_LNG": DEFAULT_CENTER[1],
     }
@@ -238,6 +461,31 @@ def index():
     )
 
 
+@app.route("/map")
+def pharmacy_map():
+    """Standalone verified-pharmacy map with auto-location sorting."""
+    city = request.args.get("city", "").strip()
+    db = get_db()
+    sql = [
+        "SELECT id, name, city, address, lat, lng, is_open_24h, open_time, close_time,",
+        "delivery, description, phone, shop_photo FROM shops WHERE status='Verified'",
+    ]
+    params = []
+    if city:
+        sql.append("AND (LOWER(city) LIKE ? OR LOWER(address) LIKE ?)")
+        term = f"%{city.lower()}%"
+        params += [term, term]
+    sql.append("ORDER BY name")
+    shops = db.execute(" ".join(sql), params).fetchall()
+    enriched = []
+    for shop in shops:
+        item = dict(shop)
+        item["open_now"] = is_open_now(shop)
+        item["rating"] = shop_rating(db, shop["id"])
+        enriched.append(item)
+    return render_template("map.html", shops=enriched, city=city)
+
+
 @app.route("/search")
 def search_page():
     q = request.args.get("q", "").strip()
@@ -246,14 +494,55 @@ def search_page():
     lat = request.args.get("lat", type=float)
     lng = request.args.get("lng", type=float)
     sort = request.args.get("sort", "distance")
+    dosage = request.args.get("dosage", "").strip()
+    quantity = max(1, min(99, request.args.get("quantity", type=int) or 1))
     in_stock = request.args.get("in_stock", "1") == "1"
     rx = request.args.get("rx", "")
     db = get_db()
     categories = db.execute("SELECT * FROM categories ORDER BY name").fetchall()
     return render_template(
         "search.html", query=q, city=city, category=cat, sort=sort,
+        dosage=dosage, quantity=quantity,
         in_stock=in_stock, rx=rx, categories=categories, lat=lat or "", lng=lng or "",
     )
+
+
+@app.route("/prescription", methods=["GET", "POST"])
+def prescription_upload():
+    """Patient-facing prescription upload request.
+
+    This intentionally starts as a request/verification queue rather than a full
+    cart so the product stays compliant and pharmacist-reviewed.
+    """
+    if request.method == "POST":
+        customer = current_customer()
+        name = (request.form.get("name") or (customer["name"] if customer else "") or "").strip()
+        phone = (request.form.get("phone") or (customer["phone"] if customer else "") or "").strip()
+        city = (request.form.get("city") or (customer["city"] if customer else "") or "").strip()
+        note = (request.form.get("note") or "").strip()
+        lat = request.form.get("lat", type=float)
+        lng = request.form.get("lng", type=float)
+        upload = save_upload(request.files.get("prescription_file"), ALLOWED_DOC)
+
+        if not phone or len(phone) < 7:
+            flash("Enter a valid phone number so a pharmacy can confirm details.", "danger")
+        elif not upload:
+            flash("Upload a clear prescription image or PDF under 8 MB.", "danger")
+        else:
+            db = get_db()
+            cur = db.execute(
+                """INSERT INTO prescription_requests
+                (customer_id, customer_name, customer_phone, city, lat, lng,
+                 prescription_file, note, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Submitted')""",
+                (session.get("customer_id"), name or None, phone, city, lat, lng, upload, note),
+            )
+            db.commit()
+            log_activity("customer", session.get("customer_id"), "upload_prescription", f"request#{cur.lastrowid}")
+            flash("Prescription submitted. A verified pharmacy can review it and help match availability.", "success")
+            return redirect(url_for("account") if session.get("customer_id") else url_for("search_page", city=city))
+
+    return render_template("prescription.html")
 
 
 @app.route("/pharmacy/<int:shop_id>")
@@ -292,6 +581,8 @@ def api_search():
     lat = request.args.get("lat", type=float)
     lng = request.args.get("lng", type=float)
     sort = request.args.get("sort", "distance")
+    dosage = request.args.get("dosage", "").strip()
+    quantity = max(1, min(99, request.args.get("quantity", type=int) or 1))
     in_stock = request.args.get("in_stock", "1") == "1"
     rx = request.args.get("rx", "")
 
@@ -317,11 +608,15 @@ def api_search():
         sql.append("AND (LOWER(s.city) LIKE ? OR LOWER(s.address) LIKE ?)")
         ct = f"%{city.lower()}%"
         params += [ct, ct]
+    if dosage:
+        sql.append("AND LOWER(i.dosage) LIKE ?")
+        params.append(f"%{dosage.lower()}%")
     if cat:
         sql.append("AND i.category_id=?")
         params.append(cat)
     if in_stock:
-        sql.append("AND i.stock_quantity > 0")
+        sql.append("AND i.stock_quantity >= ?")
+        params.append(quantity)
     if rx == "1":
         sql.append("AND i.prescription=1")
     elif rx == "0":
@@ -350,7 +645,7 @@ def api_search():
     else:  # distance
         results.sort(key=lambda x: x["distance_km"] if x["distance_km"] is not None else 1e9)
 
-    return jsonify({"ok": True, "count": len(results), "results": results})
+    return jsonify({"ok": True, "count": len(results), "requested_quantity": quantity, "results": results})
 
 
 @app.route("/api/autocomplete")
@@ -369,11 +664,96 @@ def api_autocomplete():
     return jsonify([dict(r) for r in rows])
 
 
+@app.route("/api/geocode")
+def api_geocode():
+    """Geocode a city/address using the public OpenStreetMap Nominatim API.
+
+    The API is listed in public-apis and requires no key. If it is unreachable,
+    MediFinder falls back to verified-pharmacy coordinates from the local DB.
+    """
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify({"ok": False, "error": "Enter at least two characters."}), 400
+
+    results = []
+    try:
+        data = public_api_json("https://nominatim.openstreetmap.org/search", {
+            "format": "jsonv2", "q": q, "limit": 5, "countrycodes": "in",
+            "addressdetails": 1,
+        })
+        for place in data[:5]:
+            addr = place.get("address") or {}
+            results.append({
+                "name": place.get("display_name", q),
+                "lat": float(place["lat"]), "lng": float(place["lon"]),
+                "city": addr.get("city") or addr.get("town") or addr.get("village")
+                        or addr.get("suburb") or addr.get("state_district") or q,
+                "source": "openstreetmap-nominatim",
+                "approximate": False,
+            })
+    except Exception:
+        results = []
+
+    if not results:
+        fallback = city_location_fallback(get_db(), q)
+        results.append({"name": fallback["city"], **fallback})
+
+    return jsonify({"ok": True, "results": results})
+
+
+@app.route("/api/reverse-geocode")
+def api_reverse_geocode():
+    """Reverse geocode coordinates using Nominatim with a local fallback."""
+    lat = request.args.get("lat", type=float)
+    lng = request.args.get("lng", type=float)
+    if lat is None or lng is None:
+        return jsonify({"ok": False, "error": "Coordinates required."}), 400
+
+    try:
+        data = public_api_json("https://nominatim.openstreetmap.org/reverse", {
+            "format": "jsonv2", "lat": lat, "lon": lng, "zoom": 12, "addressdetails": 1,
+        })
+        addr = data.get("address") or {}
+        city = addr.get("city") or addr.get("town") or addr.get("village") \
+            or addr.get("suburb") or addr.get("county") or addr.get("state_district") or ""
+        if city:
+            return jsonify({
+                "ok": True, "city": city,
+                "display_name": data.get("display_name", city),
+                "source": "openstreetmap-nominatim",
+                "approximate": False,
+            })
+    except Exception:
+        pass
+
+    db = get_db()
+    rows = db.execute(
+        "SELECT city, lat, lng FROM shops WHERE status='Verified' AND lat IS NOT NULL AND lng IS NOT NULL"
+    ).fetchall()
+    nearest = None
+    for row in rows:
+        d = haversine(lat, lng, row["lat"], row["lng"])
+        if d is not None and (nearest is None or d < nearest[0]):
+            nearest = (d, row["city"])
+    return jsonify({
+        "ok": True, "city": (nearest[1] if nearest else "Patna"),
+        "source": "nearest-local-pharmacy", "approximate": True,
+    })
+
+
+@app.route("/api/location/estimate")
+def api_location_estimate():
+    """Best-effort location fallback for preview/browser geolocation failures."""
+    city = request.args.get("city", "").strip()
+    fallback = city_location_fallback(get_db(), city)
+    return jsonify({"ok": True, **fallback})
+
+
 @app.route("/api/shops/nearby")
 def api_nearby_shops():
     lat = request.args.get("lat", type=float)
     lng = request.args.get("lng", type=float)
-    if not lat or not lng:
+    if lat is None or lng is None:
         return jsonify({"ok": False, "error": "Coordinates required"}), 400
     db = get_db()
     rows = db.execute(
@@ -414,16 +794,10 @@ def api_shop(shop_id):
 @app.route("/api/reserve", methods=["POST"])
 def api_reserve():
     data = request.get_json(silent=True) or request.form
-    try:
-        med_id = int(data.get("med_id") or 0)
-    except (TypeError, ValueError):
-        med_id = 0
+    med_id = parse_int(data.get("med_id"), default=0, minimum=0)
     phone = (data.get("phone") or "").strip()
     name = (data.get("name") or "").strip()
-    try:
-        qty = max(1, min(99, int(data.get("quantity") or 1)))
-    except (TypeError, ValueError):
-        qty = 1
+    qty = parse_int(data.get("quantity"), default=1, minimum=1, maximum=99)
     note = (data.get("note") or "").strip()
 
     if not med_id or not phone:
@@ -432,14 +806,21 @@ def api_reserve():
         return jsonify({"ok": False, "error": "Enter a valid phone number."}), 400
 
     db = get_db()
+    expire_holds(db)
     item = db.execute(
         "SELECT i.*, s.name AS shop_name FROM inventory i JOIN shops s ON s.id=i.shop_id "
         "WHERE i.id=? AND s.status='Verified' AND i.is_active=1", (med_id,)
     ).fetchone()
     if not item:
         return jsonify({"ok": False, "error": "Medicine not available."}), 404
-    if item["stock_quantity"] < qty:
-        return jsonify({"ok": False, "error": f"Only {item['stock_quantity']} units in stock."}), 400
+    active_holds = db.execute(
+        "SELECT COALESCE(SUM(quantity), 0) FROM reservations "
+        "WHERE inventory_id=? AND status IN ('Pending', 'Confirmed')",
+        (med_id,),
+    ).fetchone()[0] or 0
+    available_qty = max(0, (item["stock_quantity"] or 0) - active_holds)
+    if available_qty < qty:
+        return jsonify({"ok": False, "error": f"Only {available_qty} units are currently available to hold."}), 400
 
     held_until = datetime.utcnow() + timedelta(hours=HOLD_HOURS)
     cur = db.execute(
@@ -466,7 +847,9 @@ def api_reserve():
 @app.route("/account/register", methods=["GET", "POST"])
 def customer_register():
     if session.get("customer_id"):
-        return redirect(url_for("account"))
+        if current_customer():
+            return redirect(url_for("account"))
+        session.pop("customer_id", None)
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -490,27 +873,31 @@ def customer_register():
                 )
                 db.commit()
                 uid = db.execute("SELECT id FROM customers WHERE email=?", (email,)).fetchone()["id"]
+                session.clear()
                 session["customer_id"] = uid
                 log_activity("customer", uid, "register", name)
                 flash("Welcome to MediFinder!", "success")
-                return redirect(request.args.get("next") or url_for("account"))
+                return safe_redirect_target(request.args.get("next"), "account")
     return render_template("customer_auth.html", mode="register")
 
 
 @app.route("/account/login", methods=["GET", "POST"])
 def customer_login():
     if session.get("customer_id"):
-        return redirect(url_for("account"))
+        if current_customer():
+            return redirect(url_for("account"))
+        session.pop("customer_id", None)
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         db = get_db()
         user = db.execute("SELECT * FROM customers WHERE email=?", (email,)).fetchone()
         if user and check_password_hash(user["password_hash"], password):
+            session.clear()
             session["customer_id"] = user["id"]
             log_activity("customer", user["id"], "login", "")
             flash("Signed in.", "success")
-            return redirect(request.args.get("next") or url_for("account"))
+            return safe_redirect_target(request.args.get("next"), "account")
         flash("Invalid email or password.", "danger")
     return render_template("customer_auth.html", mode="login")
 
@@ -530,7 +917,7 @@ def account():
     expire_holds(db)
     reservations = db.execute(
         "SELECT r.*, i.med_name, i.dosage, i.price, s.name AS shop_name, s.city AS shop_city, "
-        "s.lat AS shop_lat, s.lng AS shop_lng "
+        "s.status AS shop_status, s.lat AS shop_lat, s.lng AS shop_lng "
         "FROM reservations r JOIN inventory i ON i.id=r.inventory_id "
         "JOIN shops s ON s.id=r.shop_id WHERE r.customer_id=? "
         "ORDER BY CASE r.status WHEN 'Pending' THEN 0 WHEN 'Confirmed' THEN 1 "
@@ -541,12 +928,17 @@ def account():
         "SELECT * FROM favourites WHERE customer_id=? ORDER BY id DESC", (customer["id"],)
     ).fetchall()
     reviews = db.execute(
-        "SELECT rv.*, s.name AS shop_name FROM reviews rv JOIN shops s ON s.id=rv.shop_id "
+        "SELECT rv.*, s.name AS shop_name, s.status AS shop_status FROM reviews rv JOIN shops s ON s.id=rv.shop_id "
         "WHERE rv.customer_id=? ORDER BY rv.id DESC", (customer["id"],),
+    ).fetchall()
+    prescription_requests = db.execute(
+        "SELECT * FROM prescription_requests WHERE customer_id=? ORDER BY id DESC",
+        (customer["id"],),
     ).fetchall()
     return render_template(
         "account.html", reservations=reservations,
         favourites=favourites, reviews=reviews,
+        prescription_requests=prescription_requests,
     )
 
 
@@ -558,6 +950,11 @@ def cancel_reservation(rid):
                    (rid, session["customer_id"])).fetchone()
     if not r:
         abort(404)
+    if r["status"] not in {"Pending", "Confirmed"}:
+        if request.path.startswith("/api/") or request.is_json:
+            return jsonify({"ok": False, "error": "Only active holds can be cancelled."}), 400
+        flash("Only active holds can be cancelled.", "warning")
+        return redirect(url_for("account"))
     db.execute("UPDATE reservations SET status='Cancelled', updated_at=? WHERE id=?",
                (datetime.utcnow(), rid))
     db.commit()
@@ -576,6 +973,13 @@ def favourites_api():
     if request.method == "GET":
         rows = db.execute("SELECT * FROM favourites WHERE customer_id=? ORDER BY id DESC", (cid,)).fetchall()
         return jsonify({"ok": True, "favourites": [dict(r) for r in rows]})
+
+    if request.method == "POST" and not request.is_json and request.form.get("id"):
+        fid = parse_int(request.form.get("id"), default=0)
+        db.execute("DELETE FROM favourites WHERE id=? AND customer_id=?", (fid, cid))
+        db.commit()
+        flash("Saved medicine removed.", "info")
+        return redirect(url_for("account"))
 
     data = request.get_json(silent=True) or {}
     med = (data.get("med_name") or "").strip()
@@ -604,7 +1008,7 @@ def favourites_api():
 @login_customer_required
 def post_review(shop_id):
     data = request.get_json(silent=True) or {}
-    rating = int(data.get("rating") or 0)
+    rating = parse_int(data.get("rating"), default=0)
     comment = (data.get("comment") or "").strip()
     if rating < 1 or rating > 5:
         return jsonify({"ok": False, "error": "Rating must be 1–5"}), 400
@@ -627,7 +1031,10 @@ def post_review(shop_id):
 @app.route("/pharmacy/register", methods=["GET", "POST"])
 def shop_register():
     if session.get("shop_id"):
-        return redirect(url_for("shop_dashboard"))
+        shop = current_shop()
+        if shop and shop["status"] != "Suspended":
+            return redirect(url_for("shop_dashboard"))
+        session.pop("shop_id", None)
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
@@ -641,7 +1048,7 @@ def shop_register():
         pincode = request.form.get("pincode", "").strip()
         description = request.form.get("description", "").strip()
         if not name or not password or not license_no:
-            flash("Shop name, password and drug license number are required.", "danger")
+            flash("Shop name, password and drug licence number are required.", "danger")
         elif len(password) < 6:
             flash("Password must be at least 6 characters.", "danger")
         else:
@@ -649,8 +1056,12 @@ def shop_register():
             shop_photo = save_upload(request.files.get("shop_photo"))
             gst = save_upload(request.files.get("gst_certificate"), ALLOWED_DOC)
             db = get_db()
-            if db.execute("SELECT 1 FROM shops WHERE name=?", (name,)).fetchone():
-                flash("A pharmacy with that name is already registered.", "danger")
+            duplicate = db.execute(
+                "SELECT 1 FROM shops WHERE LOWER(name)=? OR (?<>'' AND LOWER(email)=?)",
+                (name.lower(), email, email),
+            ).fetchone()
+            if duplicate:
+                flash("A pharmacy with that name or email is already registered.", "danger")
             else:
                 cur = db.execute(
                     """INSERT INTO shops
@@ -663,6 +1074,7 @@ def shop_register():
                      address, city, state, pincode),
                 )
                 db.commit()
+                session.clear()
                 session["shop_id"] = cur.lastrowid
                 log_activity("shop", cur.lastrowid, "register", name)
                 flash("Registration submitted. You can set up inventory while admin verifies your documents.", "info")
@@ -673,19 +1085,27 @@ def shop_register():
 @app.route("/pharmacy/login", methods=["GET", "POST"])
 def shop_login():
     if session.get("shop_id"):
-        return redirect(url_for("shop_dashboard"))
+        shop = current_shop()
+        if shop and shop["status"] != "Suspended":
+            return redirect(url_for("shop_dashboard"))
+        session.pop("shop_id", None)
     if request.method == "POST":
         name = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         db = get_db()
-        shop = db.execute("SELECT * FROM shops WHERE name=?", (name,)).fetchone()
+        shop = db.execute("SELECT * FROM shops WHERE LOWER(name)=?", (name.lower(),)).fetchone()
         if not shop and "@" in name:
-            shop = db.execute("SELECT * FROM shops WHERE email=?", (name.lower(),)).fetchone()
-        if shop and check_password_hash(shop["password_hash"], password):
-            session["shop_id"] = shop["id"]
-            log_activity("shop", shop["id"], "login", "")
-            return redirect(url_for("shop_dashboard"))
-        flash("Invalid credentials.", "danger")
+            shop = db.execute("SELECT * FROM shops WHERE LOWER(email)=?", (name.lower(),)).fetchone()
+        if shop and shop["password_hash"] and check_password_hash(shop["password_hash"], password):
+            if shop["status"] == "Suspended":
+                flash("This pharmacy account is suspended. Contact admin support.", "danger")
+            else:
+                session.clear()
+                session["shop_id"] = shop["id"]
+                log_activity("shop", shop["id"], "login", "")
+                return redirect(url_for("shop_dashboard"))
+        else:
+            flash("Invalid credentials.", "danger")
     return render_template("shop_login.html")
 
 
@@ -732,10 +1152,21 @@ def shop_dashboard():
         "COUNT(*) AS total FROM reservations WHERE shop_id=?",
         (shop["id"],),
     ).fetchone())
+    low_stock = db.execute(
+        "SELECT * FROM inventory WHERE shop_id=? AND is_active=1 AND stock_quantity BETWEEN 0 AND 9 "
+        "ORDER BY stock_quantity ASC, med_name LIMIT 6",
+        (shop["id"],),
+    ).fetchall()
+    expiring_items = db.execute(
+        "SELECT * FROM inventory WHERE shop_id=? AND is_active=1 AND expiry_date IS NOT NULL "
+        "AND expiry_date < date('now','+45 day') ORDER BY expiry_date ASC LIMIT 6",
+        (shop["id"],),
+    ).fetchall()
     return render_template(
         "shop_dashboard.html",
         shop=shop, categories=categories, inventory=inventory,
         reservations=reservations, stats=stats, res_stats=res_stats,
+        low_stock=low_stock, expiring_items=expiring_items,
     )
 
 
@@ -748,6 +1179,9 @@ def add_inventory():
     if not med:
         flash("Medicine name is required.", "danger")
         return redirect(url_for("shop_dashboard"))
+    price = parse_float(f.get("price"), default=0, minimum=0)
+    mrp = parse_float(f.get("mrp"), default=0, minimum=0)
+    stock = parse_int(f.get("stock_quantity"), default=0, minimum=0)
     db = get_db()
     db.execute(
         """INSERT INTO inventory
@@ -757,8 +1191,7 @@ def add_inventory():
         (shop["id"], med, f.get("salt_composition", "").strip(),
          f.get("category_id", type=int), f.get("manufacturer", "").strip(),
          f.get("batch_no", "").strip(), f.get("expiry_date") or None,
-         f.get("price", type=float, default=0), f.get("mrp", type=float, default=0),
-         f.get("stock_quantity", type=int, default=0), f.get("dosage", "").strip(),
+         price, mrp, stock, f.get("dosage", "").strip(),
          1 if f.get("prescription") else 0),
     )
     db.commit()
@@ -782,9 +1215,24 @@ def update_inventory(item_id):
                    "stock_quantity", "prescription", "is_active"}
         fields, values = [], []
         for k, v in data.items():
-            if k in allowed:
-                fields.append(f"{k}=?")
-                values.append(v)
+            if k not in allowed:
+                continue
+            if k in {"price", "mrp"}:
+                v = parse_float(v, default=0, minimum=0)
+            elif k == "stock_quantity":
+                v = parse_int(v, default=0, minimum=0)
+            elif k == "category_id":
+                v = parse_int(v, default=0, minimum=0) or None
+            elif k in {"prescription", "is_active"}:
+                v = 1 if str(v).lower() in {"1", "true", "yes", "on"} else 0
+            elif k == "med_name":
+                v = str(v or "").strip()
+                if not v:
+                    return jsonify({"ok": False, "error": "Medicine name is required"}), 400
+            elif isinstance(v, str):
+                v = v.strip()
+            fields.append(f"{k}=?")
+            values.append(v)
         if not fields:
             return jsonify({"ok": False, "error": "Nothing to update"}), 400
         fields.append("updated_at=?")
@@ -794,12 +1242,14 @@ def update_inventory(item_id):
         db.commit()
         return jsonify({"ok": True})
     # Form fallback (stock quick-update)
-    stock = request.form.get("stock_quantity", type=int)
-    price = request.form.get("price", type=float)
-    if stock is not None:
+    stock_raw = request.form.get("stock_quantity")
+    price_raw = request.form.get("price")
+    if stock_raw not in (None, ""):
+        stock = parse_int(stock_raw, default=item["stock_quantity"] or 0, minimum=0)
         db.execute("UPDATE inventory SET stock_quantity=?, updated_at=? WHERE id=?",
                    (stock, datetime.utcnow(), item_id))
-    if price is not None:
+    if price_raw not in (None, ""):
+        price = parse_float(price_raw, default=item["price"] or 0, minimum=0)
         db.execute("UPDATE inventory SET price=?, updated_at=? WHERE id=?",
                    (price, datetime.utcnow(), item_id))
     db.commit()
@@ -825,9 +1275,23 @@ def shop_profile_update():
     if request.method == "POST":
         f = request.form
         db = get_db()
+        new_name = f.get("name", "").strip()
+        new_email = f.get("email", "").strip().lower()
+        if not new_name:
+            flash("Shop name is required.", "danger")
+            return redirect(url_for("shop_dashboard"))
+        duplicate = db.execute(
+            "SELECT 1 FROM shops WHERE id<>? AND (LOWER(name)=? OR (?<>'' AND LOWER(email)=?))",
+            (shop["id"], new_name.lower(), new_email, new_email),
+        ).fetchone()
+        if duplicate:
+            flash("Another pharmacy already uses that name or email.", "danger")
+            return redirect(url_for("shop_dashboard"))
         fields = ["name", "email", "phone", "owner_name", "description",
                   "address", "city", "state", "pincode", "open_time", "close_time"]
         values = [f.get(k, "").strip() for k in fields]
+        values[0] = new_name
+        values[1] = new_email
         lat = f.get("lat", type=float)
         lng = f.get("lng", type=float)
         values += [lat, lng, 1 if f.get("is_open_24h") else 0,
@@ -858,10 +1322,26 @@ def reservation_action(rid, action):
                    (rid, shop["id"])).fetchone()
     if not r:
         abort(404)
+    if r["status"] not in {"Pending", "Confirmed"}:
+        message = "Only active reservations can be changed."
+        if request.is_json:
+            return jsonify({"ok": False, "error": message}), 400
+        flash(message, "warning")
+        return redirect(url_for("shop_dashboard"))
+
     new_status = status_map[action]
+    if action == "collect":
+        stock = db.execute("SELECT stock_quantity FROM inventory WHERE id=?", (r["inventory_id"],)).fetchone()
+        if not stock or stock["stock_quantity"] < r["quantity"]:
+            message = "Not enough stock to mark this hold as collected."
+            if request.is_json:
+                return jsonify({"ok": False, "error": message}), 400
+            flash(message, "danger")
+            return redirect(url_for("shop_dashboard"))
+
     db.execute("UPDATE reservations SET status=?, updated_at=? WHERE id=?",
                (new_status, datetime.utcnow(), rid))
-    # When collected, decrement stock
+    # When collected, decrement stock once. Non-active statuses were rejected above.
     if new_status == "Collected":
         db.execute("UPDATE inventory SET stock_quantity = MAX(0, stock_quantity - ?) WHERE id=?",
                    (r["quantity"], r["inventory_id"]))
@@ -876,18 +1356,27 @@ def reservation_action(rid, action):
 # ---------------------------------------------------------------------------
 # Admin
 # ---------------------------------------------------------------------------
+@app.route("/admin/login", methods=["GET", "POST"])
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
-    if session.get("admin"):
-        return redirect(url_for("admin_dashboard"))
+    token = active_admin_token()
+    if session.get("admin") or token:
+        return admin_dashboard_redirect(token)
     if request.method == "POST":
         u = request.form.get("username", "").strip()
-        p = request.form.get("password", "")
-        if u == ADMIN_USERNAME and p == ADMIN_PASSWORD:
+        p = request.form.get("password", "").strip()
+        username_ok = compare_digest(u.lower(), ADMIN_USERNAME.lower())
+        password_ok = compare_digest(p, ADMIN_PASSWORD)
+        if username_ok and password_ok:
+            session.clear()
             session["admin"] = True
             log_activity("admin", None, "login", u)
-            return redirect(url_for("admin_dashboard"))
-        flash("Invalid admin credentials.", "danger")
+            # Some live-preview iframes block cookies altogether. In that case,
+            # carry a short-lived signed token through admin links/forms so the
+            # demo console still opens after the credential check succeeds.
+            fallback_token = issue_admin_token(u) if is_preview_request() else ""
+            return admin_dashboard_redirect(fallback_token)
+        flash("Invalid admin credentials. For the demo, use admin / admin123.", "danger")
     return render_template("admin_login.html")
 
 
@@ -900,7 +1389,7 @@ def admin_dashboard():
     verified = db.execute(
         "SELECT * FROM shops WHERE status='Verified' ORDER BY name").fetchall()
     rejected = db.execute(
-        "SELECT * FROM shops WHERE status='Rejected' ORDER BY id DESC").fetchall()
+        "SELECT * FROM shops WHERE status IN ('Rejected', 'Suspended') ORDER BY status, id DESC").fetchall()
     stats = dict(db.execute(
         "SELECT "
         "(SELECT COUNT(*) FROM shops) AS shops, "
@@ -909,6 +1398,7 @@ def admin_dashboard():
         "(SELECT COUNT(*) FROM customers) AS customers, "
         "(SELECT COUNT(*) FROM inventory) AS inventory, "
         "(SELECT COUNT(*) FROM reservations) AS reservations, "
+        "(SELECT COUNT(*) FROM prescription_requests) AS prescriptions, "
         "(SELECT COUNT(*) FROM reviews) AS reviews"
     ).fetchone())
     recent_reservations = db.execute(
@@ -916,12 +1406,16 @@ def admin_dashboard():
         "JOIN inventory i ON i.id=r.inventory_id JOIN shops s ON s.id=r.shop_id "
         "ORDER BY r.id DESC LIMIT 15"
     ).fetchall()
+    prescription_requests = db.execute(
+        "SELECT * FROM prescription_requests ORDER BY id DESC LIMIT 15"
+    ).fetchall()
     logs = db.execute(
         "SELECT * FROM activity_log ORDER BY id DESC LIMIT 30").fetchall()
     return render_template(
         "admin_dashboard.html",
         pending=pending, verified=verified, rejected=rejected,
-        stats=stats, recent_reservations=recent_reservations, logs=logs,
+        stats=stats, recent_reservations=recent_reservations,
+        prescription_requests=prescription_requests, logs=logs,
     )
 
 
@@ -942,7 +1436,7 @@ def admin_shop_action(shop_id, action):
         db.execute("UPDATE shops SET status='Rejected', rejection_note=? WHERE id=?", (note, shop_id))
         log_activity("admin", None, "reject_shop", f"{shop['name']}: {note}")
     elif action == "suspend":
-        db.execute("UPDATE shops SET status='Rejected', rejection_note=? WHERE id=?",
+        db.execute("UPDATE shops SET status='Suspended', rejection_note=? WHERE id=?",
                    (note or "Suspended by admin", shop_id,))
         log_activity("admin", None, "suspend_shop", shop["name"])
     elif action == "reinstate":
@@ -952,11 +1446,34 @@ def admin_shop_action(shop_id, action):
         db.execute("DELETE FROM shops WHERE id=?", (shop_id,))
         log_activity("admin", None, "delete_shop", shop["name"])
     db.commit()
-    return redirect(url_for("admin_dashboard"))
+    return admin_dashboard_redirect()
+
+
+@app.route("/admin/prescription/<int:request_id>/<action>", methods=["POST"])
+@admin_required
+def admin_prescription_action(request_id, action):
+    status_map = {"review": "Reviewing", "match": "Matched", "close": "Closed"}
+    if action not in status_map:
+        abort(404)
+    db = get_db()
+    req = db.execute("SELECT * FROM prescription_requests WHERE id=?", (request_id,)).fetchone()
+    if not req:
+        abort(404)
+    db.execute(
+        "UPDATE prescription_requests SET status=?, updated_at=? WHERE id=?",
+        (status_map[action], datetime.utcnow(), request_id),
+    )
+    db.commit()
+    log_activity("admin", None, f"prescription_{action}", f"request#{request_id}")
+    flash(f"Prescription request marked {status_map[action]}.", "success")
+    return admin_dashboard_redirect()
 
 
 @app.route("/admin/logout")
 def admin_logout():
+    token = admin_token_from_request()
+    if token:
+        ACTIVE_ADMIN_TOKENS.discard(token)
     session.pop("admin", None)
     return redirect(url_for("admin"))
 
@@ -988,7 +1505,8 @@ def bootstrap():
         seed_demo_data(app.config["DATABASE"])
 
 
-bootstrap()
+if os.environ.get("MEDIFINDER_SKIP_BOOTSTRAP") != "1":
+    bootstrap()
 
 
 if __name__ == "__main__":

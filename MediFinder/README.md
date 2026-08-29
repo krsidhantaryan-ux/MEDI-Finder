@@ -1,14 +1,10 @@
 # MediFinder
 
-A complete medicine-availability platform. Patients search by brand or active
-ingredient across **verified nearby pharmacies**, see live stock / pricing /
-distance on a map, and place a 2-hour hold. Pharmacists manage inventory,
-reservations and store profile; an admin console verifies pharmacies and
-monitors the network.
+MediFinder is a local healthcare utility for finding medicine at verified nearby pharmacies. Patients search by brand or active ingredient, compare live stock, price, strength, distance and opening status on a map, then place a 2-hour pickup hold. Pharmacies manage daily inventory and reservations; admins verify stores and review prescription upload requests.
 
 ![Stack](https://img.shields.io/badge/Flask-3-000?logo=flask)
 ![DB](https://img.shields.io/badge/SQLite-3-003b57?logo=sqlite)
-![Leaflet](https://img.shields.io/badge/Maps-Leaflet-199900?logo=leaflet)
+![Maps](https://img.shields.io/badge/Maps-OpenStreetMap-7ebc6f?logo=openstreetmap)
 
 ---
 
@@ -24,82 +20,77 @@ python app.py
 
 Open <http://localhost:5000>.
 
-The database (`medifinder.db`) is created automatically on first run and
-seeded with **5 verified pharmacies**, 42 medicines across 11 categories,
-realistic reviews and a demo customer.
+Run the built-in smoke checks with:
+
+```bash
+python tests/smoke_app.py
+```
+
+The database (`medifinder.db`) is created automatically on first run and seeded with verified pharmacies, medicines, reviews and a demo customer.
 
 ### Demo credentials
 
-| Role       | Login                              | Password     |
-|------------|------------------------------------|--------------|
-| Customer   | `demo@medifinder.app`              | `demo1234`   |
-| Pharmacy   | any seeded shop name (e.g. `Apollo Pharmacy — Frazer Road`) | `demo1234` |
-| Admin      | `admin`                            | `admin123`   |
+| Role | Login | Password |
+|---|---|---|
+| Customer | `demo@medifinder.app` | `demo1234` |
+| Pharmacy | any seeded shop name, e.g. `Apollo Pharmacy — Frazer Road` | `demo1234` |
+| Admin | `admin` | `admin123` |
 
-Set `ADMIN_USER`, `ADMIN_PASS` and `SECRET_KEY` environment variables in
-production.
+Set `ADMIN_USER`, `ADMIN_PASS` and `SECRET_KEY` environment variables in production.
+
+---
+
+## Product direction
+
+The UI is intentionally restrained and practical: off-white healthcare surfaces, solid cards, clear comparison tables/cards, map-first local context and minimal motion for feedback. It avoids generic AI/SaaS landing-page tropes and focuses on the everyday workflows patients and pharmacies need.
 
 ---
 
 ## Features
 
 ### For patients
-- **Search by brand or salt composition** (case-insensitive, fuzzy)
-- **Live map** (Leaflet + CARTO tiles) with distance-based sorting via Haversine
-- **Browser geolocation** with one-tap "use my location" and reverse geocoding
-- **Filters**: category, in-stock only, Rx / OTC, sort by distance / price / stock
-- **Medicine autocomplete** and trending searches on the landing page
-- **2-hour holds** with phone, name, quantity and note — no payment, no friction
-- **Customer accounts** (email + hashed password):
-  - reservation history with cancel action
-  - favourite medicines for one-tap re-search
-  - star reviews on pharmacies
-- **Pharmacy profile pages** with inventory filter, hours, phone, directions,
-  delivery / 24-hour badges and community reviews
-- **Dark mode** (system preference + toggle, persisted)
-- Fully responsive, PWA-friendly meta
+- **Search by brand, salt composition or manufacturer**.
+- **Strength / dosage and quantity inputs** so results are closer to the exact medicine needed.
+- **OpenStreetMap-powered maps** on the homepage, search results, pharmacy profiles and the standalone `/map` pharmacy explorer.
+- **Auto-location** with backend reverse geocoding on the homepage, search page, pharmacy map, prescription upload and pharmacy profile tools.
+- **Filters** for category, in-stock only, prescription / OTC and sorting by distance / price / stock.
+- **Medicine autocomplete** and popular searches on the landing page.
+- **2-hour pickup holds** with phone, name, quantity and note — no payment required.
+- **Prescription upload** (`/prescription`) for image/PDF requests that need pharmacist review before matching stock.
+- **Customer account** with active holds, saved medicines, prescription-request history and reviews.
+- **Pharmacy profile pages** with inventory filter, hours, phone, directions, delivery / 24-hour badges and community reviews.
+- **Dark mode** with persisted preference.
 
 ### For pharmacies (`/pharmacy`)
-- Registration with drug-license, shop photo and GST upload (admin-verified)
-- **Dashboard** with KPIs: items in stock, stock value, reservations, expiring
-- Full **inventory management**:
-  - add with category, manufacturer, batch, expiry, MRP, price, stock, Rx flag
-  - inline stock quick-update
-  - edit / delete items
-  - low-stock / out-of-stock indicators
-- **Reservation workflow**: Pending → Confirmed → Collected (auto-decrements
-  stock) or Cancelled. Holds expire automatically after 2 hours.
-- **Store profile**: hours (incl. 24-hour toggle), delivery toggle, description,
-  photo, contact details
-- **Location pinning** via draggable map marker, address search (Nominatim) or
-  "use my location" — feeds straight into the customer distance sort
-- Pending-verification banner; inventory can be prepared while under review
+- Registration with drug-licence, shop photo and optional GST upload for admin verification.
+- Operations dashboard with KPIs: in-stock items, stock value, reservation count and expiring items.
+- **Low-stock and expiring-stock queues** for daily pharmacy work.
+- Inventory management: add category, manufacturer, batch, expiry, MRP, selling price, stock, dosage and prescription flag.
+- Inline stock quick-update, edit and delete actions.
+- Reservation workflow: **Pending → Confirmed → Collected** (auto-decrements stock) or Cancelled. Holds expire automatically after 2 hours.
+- Store profile management: hours, 24-hour toggle, delivery toggle, description, photo and contact details.
+- Location pinning with draggable map marker, address search or “use my location”.
 
 ### For admins (`/admin`)
-- Network stats (shops, verified, pending, customers, inventory, reservations, reviews)
-- **Verify / reject / suspend / reinstate / delete** pharmacies, with rejection reason
-- Document viewer (license, shop photo, GST)
-- Verified pharmacy table with quick links to public profiles
-- Live **recent reservations** feed
-- **Audit log** of all admin and user actions
+- Network stats for pharmacies, customers, inventory, reservations, prescription requests and reviews.
+- Verify, reject, suspend, reinstate or delete pharmacies with rejection notes.
+- Document viewer for licence, shop photo and GST uploads.
+- **Prescription review queue** with Submitted / Reviewing / Matched / Closed actions.
+- Recent reservations feed and audit log.
 
 ### Engineering
-- Single-file Flask app plus `database.py` (schema + idempotent migrations)
-  and `seed.py` (demo data)
-- Passwords hashed with Werkzeug (PBKDF2); no plaintext
-- All mutating admin/shop actions use POST; destructive actions confirm
-- SQLite with foreign keys, indexes on all hot query paths
-- JSON APIs for search, autocomplete, nearby shops, reservations, favourites,
-  reviews and inventory updates
-- Custom design system — editorial "Apothecary Modern" aesthetic with Fraunces
-  display serif + Inter body, warm paper background, teal/amber palette.
-  No Bootstrap, no glassmorphism, no purple-blue gradients.
+- Flask app with `database.py` schema/migrations and `seed.py` idempotent demo data.
+- SQLite with foreign keys and indexes on hot query paths.
+- Passwords hashed with Werkzeug PBKDF2.
+- Mutating admin/shop actions use POST; destructive actions confirm in the UI.
+- JSON APIs for search, autocomplete, nearby shops, public geocoding/reverse-geocoding, reservations, favourites, reviews and inventory updates.
+- Motion for JavaScript is used sparingly for scroll reveal, button feedback, result-card entry, modal/toast feedback and reduced-motion-friendly interactions.
 
 ---
 
 ## Project structure
 
-```
+```text
 MediFinder/
 ├── app.py              # Flask app, routes, APIs
 ├── database.py         # Schema, migrations, connection helpers
@@ -107,16 +98,19 @@ MediFinder/
 ├── requirements.txt
 ├── medifinder.db       # Auto-created SQLite DB
 ├── static/
-│   ├── css/style.css   # Full custom design system
-│   ├── js/app.js       # Theme, toasts, map, reservation modal, favourites
+│   ├── css/style.css   # Product UI system
+│   ├── js/app.js       # Theme, toasts, maps, reservation modal, favourites
+│   ├── js/motion-system.js
 │   ├── img/favicon.svg
-│   └── uploads/        # Pharmacy documents / photos
+│   └── uploads/        # Pharmacy documents, photos and prescription uploads
 └── templates/
     ├── base.html
-    ├── index.html              # Landing + search hero
-    ├── search.html             # Results + map
+    ├── index.html
+    ├── search.html
+    ├── map.html
+    ├── prescription.html
     ├── shop_profile.html
-    ├── customer_auth.html      # Combined login/register
+    ├── customer_auth.html
     ├── account.html
     ├── shop_login.html
     ├── shop_register.html
@@ -128,36 +122,37 @@ MediFinder/
 
 ## API summary
 
-| Method | Path                              | Description                          |
-|--------|-----------------------------------|--------------------------------------|
-| GET    | `/api/search?q=&city=&cat=&lat=&lng=&sort=&in_stock=&rx=` | Search inventory     |
-| GET    | `/api/autocomplete?q=`            | Medicine name/salt suggestions       |
-| GET    | `/api/shops/nearby?lat=&lng=`     | Closest verified pharmacies          |
-| GET    | `/api/shop/<id>`                  | Shop + inventory JSON                |
-| POST   | `/api/reserve`                    | Place a 2-hour hold                  |
-| GET/POST/DELETE | `/api/favourites`        | Customer favourites (auth)           |
-| POST   | `/api/shops/<id>/review`          | Star + comment (auth)                |
-| POST   | `/pharmacy/inventory/<id>/update` | Update item JSON (shop auth)         |
+| Method | Path | Description |
+|---|---|---|
+| GET | `/map?city=` | Standalone verified pharmacy map |
+| GET | `/api/search?q=&city=&cat=&lat=&lng=&sort=&dosage=&quantity=&in_stock=&rx=` | Search inventory |
+| GET | `/api/autocomplete?q=` | Medicine name/salt suggestions |
+| GET | `/api/shops/nearby?lat=&lng=` | Closest verified pharmacies |
+| GET | `/api/geocode?q=` | Keyless public OpenStreetMap/Nominatim geocoding with local fallback |
+| GET | `/api/reverse-geocode?lat=&lng=` | Keyless public OpenStreetMap/Nominatim reverse geocoding with local fallback |
+| GET | `/api/location/estimate?city=` | Local approximate fallback when browser location is blocked |
+| GET | `/api/shop/<id>` | Shop + inventory JSON |
+| POST | `/api/reserve` | Place a 2-hour pickup hold |
+| GET/POST/DELETE | `/api/favourites` | Customer favourites |
+| POST | `/api/shops/<id>/review` | Pharmacy review |
+| POST | `/pharmacy/inventory/<id>/update` | Update item JSON or form data |
+| GET/POST | `/prescription` | Prescription upload request |
 
 ---
 
 ## Deployment
 
-The repo is deployment-ready out of the box:
+The repo is deployment-ready:
 - `gunicorn` is in `requirements.txt`
-- a `Procfile` (used by Railway/Heroku/Dokku/Render Docker-style)
-- a `render.yaml` Blueprint for one-click Render deploys
+- `Procfile` works for Railway/Heroku/Dokku-style hosts
+- `render.yaml` supports Render deployment
 - `DATABASE_PATH`, `UPLOAD_FOLDER` and `SECRET_KEY` can be set via env vars
 
 ### One-click deploy to Render
 
-Click the button below (or open
-`render.com/deploy?repo=https://github.com/krsidhantaryan-ux/MEDI-Finder`) and
-follow the prompts:
+Open `render.com/deploy?repo=https://github.com/krsidhantaryan-ux/MEDI-Finder` and follow the prompts.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/krsidhantaryan-ux/MEDI-Finder)
-
-Settings (auto-filled by `render.yaml`):
+Settings from `render.yaml`:
 
 | Setting | Value |
 |---|---|
@@ -166,44 +161,25 @@ Settings (auto-filled by `render.yaml`):
 | Start command | `gunicorn app:app --workers 1 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT` |
 | Health check | `/` |
 
-After the first deploy, set the `ADMIN_PASS` environment variable in the
-Render dashboard (Environment section) to something other than the default,
-then redeploy.
+After first deploy, change `ADMIN_PASS` in the host dashboard and redeploy.
 
-**Free-tier caveat:** the SQLite DB and uploaded files live on the ephemeral
-filesystem, so they reset to seed data on each deploy/restart. To keep data,
-upgrade to a paid instance and attach a persistent disk mounted at a path of
-your choice, then set `DATABASE_PATH` and `UPLOAD_FOLDER` to point at it.
-
-### Railway / Heroku / Dokku
-
-The `Procfile` works as-is. Just set the env vars below.
-
-### PythonAnywhere
-
-1. Clone the repo from GitHub into a PythonAnywhere web app.
-2. `pip install --user -r MediFinder/requirements.txt`
-3. Point the WSGI file at `MediFinder/app.py`'s `app` object.
-4. Reload.
+**Free-tier caveat:** SQLite and uploaded files live on the ephemeral filesystem unless you attach persistent storage. For durable data, set `DATABASE_PATH` and `UPLOAD_FOLDER` to a mounted persistent disk.
 
 ### Environment variables
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `SECRET_KEY` | Flask session signing | dev-only key — **set in production** |
+| `SECRET_KEY` | Flask session signing | dev-only key — set in production |
 | `ADMIN_USER` | Admin login username | `admin` |
 | `ADMIN_PASS` | Admin login password | `admin123` |
 | `DATABASE_PATH` | Absolute path to SQLite file | `MediFinder/medifinder.db` |
 | `UPLOAD_FOLDER` | Absolute path for uploads | `MediFinder/static/uploads` |
 | `FLASK_ENV` | Set to `production` to force secure cookies | unset |
-| `PORT` | Port to bind (set by the host) | `5000` |
+| `PORT` | Port to bind | `5000` |
 
 ## Notes
 
-- The 2-hour hold is enforced by a `held_until` timestamp; expired holds are
-  marked the next time a shop dashboard or account page is loaded.
-- Map tiles © OpenStreetMap, © CARTO. Geocoding via Nominatim — please be
-  polite with request volume.
-- This is a reference implementation; put it behind a real WSGI server
-  (gunicorn/uwsgi) and set strong `SECRET_KEY` / admin credentials before any
-  production use.
+- The 2-hour hold is enforced by a `held_until` timestamp; expired holds are marked when shop dashboard or customer account pages load.
+- Map tiles © OpenStreetMap, © CARTO. Geocoding via Nominatim; keep request volume polite.
+- MediFinder is not medical advice and does not replace pharmacist or physician guidance.
+- Before production use, run behind a real WSGI server and set strong secrets/admin credentials.

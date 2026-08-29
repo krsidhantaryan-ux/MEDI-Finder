@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% set page_map = false %}
+{% block title %}Upload prescription — MediFinder{% endblock %}
+
+{% block content %}
+<section class="section-tight">
+<div class="container">
+    <div class="prescription-hero" data-motion="prescription-hero">
+        <span class="eyebrow"><i class="bi bi-file-earmark-medical"></i> Prescription request</span>
+        <div class="flex between center mt-2" style="gap:1rem;flex-wrap:wrap">
+            <div>
+                <h1 class="mb-0" style="font-size:clamp(2rem,4.5vw,3.5rem)">Upload once. Let a verified pharmacy review it.</h1>
+                <p class="text-muted mb-0 mt-2" style="max-width:720px">For prescription medicines or handwritten prescriptions, upload a clear photo or PDF. A verified pharmacy can review the request, confirm details by phone and help find available stock nearby.</p>
+            </div>
+            <a href="{{ url_for('search_page') }}" class="btn btn-outline"><i class="bi bi-search"></i> Search instead</a>
+        </div>
+    </div>
+
+    <div class="prescription-layout">
+        <form class="card" method="POST" enctype="multipart/form-data" data-motion="prescription-form">
+            <h2 style="font-size:1.35rem">Submit a prescription</h2>
+            <p class="text-muted small">Accepted formats: JPG, PNG, WEBP, GIF or PDF up to 8 MB. Upload only prescriptions you are authorised to share.</p>
+
+            <div class="upload-drop mb-3">
+                <label class="form-label">Prescription file <span class="req">required</span></label>
+                <input type="file" name="prescription_file" accept="image/*,.pdf" class="form-control" required>
+                <div class="form-hint">Tip: make sure the doctor details, date, patient name and medicine names are readable.</div>
+            </div>
+
+            <div class="row" style="gap:.85rem">
+                <div style="flex:1 1 220px">
+                    <label class="form-label">Patient name</label>
+                    <input type="text" name="name" class="form-control" value="{{ current_customer.name if current_customer else request.form.get('name','') }}" placeholder="Full name">
+                </div>
+                <div style="flex:1 1 180px">
+                    <label class="form-label">Phone number <span class="req">required</span></label>
+                    <input type="tel" name="phone" class="form-control" required value="{{ current_customer.phone if current_customer and current_customer.phone else request.form.get('phone','') }}" placeholder="For a confirmation call">
+                </div>
+            </div>
+
+            <div class="row mt-3" style="gap:.85rem">
+                <div style="flex:1 1 220px">
+                    <label class="form-label">City / area</label>
+                    <input type="text" name="city" id="rxCity" class="form-control" value="{{ current_customer.city if current_customer and current_customer.city else request.form.get('city','') }}" placeholder="Patna, Boring Road">
+                    <input type="hidden" name="lat" id="rxLat">
+                    <input type="hidden" name="lng" id="rxLng">
+                </div>
+                <div style="flex:0 0 auto;display:flex;align-items:flex-end">
+                    <button type="button" class="btn btn-outline" id="rxLocate"><i class="bi bi-crosshair"></i> Use my location</button>
+                </div>
+            </div>
+
+            <label class="form-label mt-3">Anything the pharmacist should know?</label>
+            <textarea name="note" class="form-control" rows="3" placeholder="Preferred pickup time, alternate brand allowed, urgent need, etc.">{{ request.form.get('note','') }}</textarea>
+
+            <button class="btn btn-primary btn-lg mt-4"><i class="bi bi-send-check"></i> Submit for review</button>
+            <p class="small text-muted mt-3 mb-0">MediFinder does not provide medical advice. Pharmacists may ask for clarification, and prescription medicines require a valid prescription.</p>
+        </form>
+
+        <aside class="card" data-motion="prescription-guide">
+            <h3><i class="bi bi-list-check text-teal"></i> What happens next?</h3>
+            <div class="ops-list">
+                <div class="ops-item"><span><strong>1. Upload</strong><small>Send a clear photo or PDF.</small></span><span class="badge badge-gray">Now</span></div>
+                <div class="ops-item"><span><strong>2. Review</strong><small>A verified pharmacy checks the details.</small></span><span class="badge badge-amber">Prescription safe</span></div>
+                <div class="ops-item"><span><strong>3. Match</strong><small>Available stock is matched near your area.</small></span><span class="badge badge-teal">Local</span></div>
+                <div class="ops-item"><span><strong>4. Pick up</strong><small>Confirm a hold and collect within the window.</small></span><span class="badge badge-green">Ready</span></div>
+            </div>
+            <hr class="divider">
+            <h3><i class="bi bi-shield-check text-teal"></i> Upload checklist</h3>
+            <ul class="auth-points" style="color:var(--ink);margin-bottom:0">
+                <li><i class="bi bi-check-circle-fill"></i> Doctor name and registration details are visible</li>
+                <li><i class="bi bi-check-circle-fill"></i> Date and patient name are visible</li>
+                <li><i class="bi bi-check-circle-fill"></i> Medicine names, strength and dosage are readable</li>
+                <li><i class="bi bi-check-circle-fill"></i> No cropped corners or blurry photos</li>
+            </ul>
+        </aside>
+    </div>
+</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    const city = document.getElementById("rxCity");
+    const lat = document.getElementById("rxLat");
+    const lng = document.getElementById("rxLng");
+    function hasCoord(value){ return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)); }
+    const saved = MF.location?.load?.();
+    if (saved) {
+        if (!city.value && saved.city) city.value = saved.city;
+        if (hasCoord(saved.lat) && hasCoord(saved.lng)) { lat.value = saved.lat; lng.value = saved.lng; }
+    }
+    document.getElementById("rxLocate")?.addEventListener("click", async (e)=>{
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Checking…';
+        try {
+            const pos = await MF.detectLocation({ city: city.value.trim() });
+            const cityName = pos.approximate ? (pos.city || city.value) : await MF.reverseGeocode(pos.lat, pos.lng);
+            lat.value = pos.lat; lng.value = pos.lng;
+            if (cityName) city.value = cityName;
+            MF.location?.save?.({ lat: pos.lat, lng: pos.lng, city: cityName || city.value, approximate: !!pos.approximate });
+            MF.toast(pos.approximate ? "Approximate area added. You can edit the city before submitting." : "Location added to your prescription request.", pos.approximate ? "info" : "success");
+        } catch {
+            MF.toast("Could not access precise location. Typing your area is enough.", "warning");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-crosshair"></i> Use my location';
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -3,22 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#145951">
-    <meta name="description" content="{% block meta_desc %}MediFinder — find genuine medicines at verified nearby pharmacies. Real-time inventory, distance, pricing and instant 2-hour holds.{% endblock %}">
+    <meta name="theme-color" content="#087567">
+    <meta name="description" content="{% block meta_desc %}MediFinder helps you find genuine medicines at verified nearby pharmacies with live stock, prices, distance and 2-hour pickup holds.{% endblock %}">
+    <script>
+        // Prevent theme flash before the main bundle loads.
+        try {
+            const savedTheme = localStorage.getItem("mf-theme") ||
+                (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+            document.documentElement.setAttribute("data-theme", savedTheme);
+        } catch (e) {}
+    </script>
     <title>{% block title %}MediFinder — Find medicines near you{% endblock %}</title>
 
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     {% if page_map %}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="preconnect" href="https://tile.openstreetmap.org">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css', v='1.9.4') }}">
     {% endif %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='20260829-10') }}">
     {% block head %}{% endblock %}
 </head>
 <body>
+<a class="skip-link" href="#mainContent">Skip to content</a>
+<div class="scroll-progress" aria-hidden="true"></div>
 <header class="nav">
     <div class="container nav-inner">
         <a class="brand" href="{{ url_for('index') }}">
@@ -28,23 +39,25 @@
                     <path d="M8.5 8.5l7 7"/>
                 </svg>
             </span>
-            <span>MediFinder<small>Verified Pharmacy Network</small></span>
+            <span>MediFinder<small>Verified pharmacy network</small></span>
         </a>
 
-        <button class="nav-toggle" id="navToggle" aria-label="Menu">
+        <button class="nav-toggle" id="navToggle" aria-label="Menu" aria-controls="navLinks" aria-expanded="false">
             <i class="bi bi-list fs-4"></i>
         </button>
 
-        <nav class="nav-links" id="navLinks">
-            <a href="{{ url_for('index') }}"><i class="bi bi-house-door me-1"></i> Home</a>
-            <a href="{{ url_for('search_page') }}"><i class="bi bi-search me-1"></i> Find Medicine</a>
+        <nav class="nav-links" id="navLinks" aria-label="Primary navigation">
+            <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}"><i class="bi bi-house-door me-1"></i> Home</a>
+            <a href="{{ url_for('search_page') }}" class="{{ 'active' if request.endpoint == 'search_page' else '' }}"><i class="bi bi-search me-1"></i> Find medicine</a>
+            <a href="{{ url_for('pharmacy_map') }}" class="{{ 'active' if request.endpoint == 'pharmacy_map' else '' }}"><i class="bi bi-map me-1"></i> Pharmacy map</a>
+            <a href="{{ url_for('prescription_upload') }}" class="{{ 'active' if request.endpoint == 'prescription_upload' else '' }}"><i class="bi bi-file-earmark-medical me-1"></i> Upload prescription</a>
             {% if current_shop %}
-            <a href="{{ url_for('shop_dashboard') }}"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
+            <a href="{{ url_for('shop_dashboard') }}" class="{{ 'active' if request.endpoint == 'shop_dashboard' else '' }}"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
             {% else %}
-            <a href="{{ url_for('shop_register') }}"><i class="bi bi-shop me-1"></i> For Pharmacies</a>
+            <a href="{{ url_for('shop_register') }}" class="{{ 'active' if request.endpoint == 'shop_register' else '' }}"><i class="bi bi-shop me-1"></i> For pharmacies</a>
             {% endif %}
             {% if current_customer %}
-            <a href="{{ url_for('account') }}"><i class="bi bi-person-circle me-1"></i> My Account</a>
+            <a href="{{ url_for('account') }}" class="{{ 'active' if request.endpoint == 'account' else '' }}"><i class="bi bi-person-circle me-1"></i> My account</a>
             {% endif %}
         </nav>
 
@@ -58,7 +71,7 @@
                 <a href="{{ url_for('shop_dashboard') }}" class="btn btn-primary btn-sm"><i class="bi bi-speedometer2"></i> <span class="btn-label">Dashboard</span></a>
             {% else %}
                 <a href="{{ url_for('customer_login') }}" class="btn btn-ghost btn-sm"><i class="bi bi-box-arrow-in-right"></i> <span class="btn-label">Sign in</span></a>
-                <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> <span class="btn-label">Find Medicine</span></a>
+                <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> <span class="btn-label">Find medicine</span></a>
             {% endif %}
         </div>
     </div>
@@ -76,7 +89,7 @@
 {% endif %}
 {% endwith %}
 
-<main>
+<main id="mainContent" tabindex="-1">
 {% block content %}{% endblock %}
 </main>
 
@@ -93,7 +106,7 @@
                     <span>MediFinder</span>
                 </a>
                 <p class="mt-3" style="max-width:320px;color:rgba(255,255,255,.65);font-size:.9rem;">
-                    Connecting patients to verified neighbourhood pharmacies with live, transparent inventory. No more calling ten shops.
+                    Find verified neighbourhood pharmacies with live stock, clear prices and pickup holds without calling one shop after another.
                 </p>
                 <div class="flex gap-2 mt-3">
                     <span class="badge badge-teal"><i class="bi bi-shield-check"></i> Licensed only</span>
@@ -104,6 +117,8 @@
                 <h4>Platform</h4>
                 <ul>
                     <li><a href="{{ url_for('search_page') }}">Find medicine</a></li>
+                    <li><a href="{{ url_for('pharmacy_map') }}">Pharmacy map</a></li>
+                    <li><a href="{{ url_for('prescription_upload') }}">Upload prescription</a></li>
                     <li><a href="{{ url_for('shop_register') }}">List your pharmacy</a></li>
                     <li><a href="{{ url_for('shop_login') }}">Pharmacy login</a></li>
                     <li><a href="{{ url_for('customer_login') }}">Customer login</a></li>
@@ -112,13 +127,13 @@
             <div>
                 <h4>Company</h4>
                 <ul>
-                    <li><a href="#features">How it works</a></li>
-                    <li><a href="#about">About</a></li>
+                    <li><a href="{{ url_for('index') }}#features">How it works</a></li>
+                    <li><a href="{{ url_for('index') }}#about">About</a></li>
                     <li><a href="{{ url_for('admin') }}">Admin</a></li>
                 </ul>
             </div>
             <div>
-                <h4>Demo access</h4>
+                <h4>Demo logins</h4>
                 <ul>
                     <li>Customer: <span class="mono">demo@medifinder.app</span></li>
                     <li>Password: <span class="mono">demo1234</span></li>
@@ -128,7 +143,7 @@
         </div>
         <div class="footer-bottom">
             <span>© {{ current_year }} MediFinder. Built for reliable access to essential medicines.</span>
-            <span><i class="bi bi-geo-alt"></i> Serving pharmacies across the region</span>
+            <span><i class="bi bi-geo-alt"></i> Serving verified local pharmacies</span>
         </div>
     </div>
 </footer>
@@ -136,9 +151,10 @@
 <div class="toast-wrap" id="toastWrap"></div>
 
 {% if page_map %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js', v='1.9.4') }}"></script>
 {% endif %}
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js', v='20260829-10') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/motion-system.js', v='20260829-10') }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

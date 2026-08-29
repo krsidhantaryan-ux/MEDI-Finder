@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% set page_map = true %}
+{% block title %}Verified pharmacy map — MediFinder{% endblock %}
+{% block meta_desc %}Open the verified pharmacy map, use your location and find nearby licensed pharmacies with live medicine stock.{% endblock %}
+
+{% block content %}
+<section class="section-tight map-explorer-page">
+<div class="container">
+    <div class="map-explorer-hero" data-motion="map-hero">
+        <div>
+            <span class="eyebrow"><i class="bi bi-map"></i> Verified pharmacy map</span>
+            <h1 class="mt-2 mb-1">See trusted pharmacies around you.</h1>
+            <p class="text-muted mb-0">Use your location to compare nearby licensed pharmacies, then search inventory in the same area.</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="mapAutoLocate"><i class="bi bi-crosshair"></i> Use my location</button>
+    </div>
+
+    <form class="map-search-panel card" id="pharmacyMapForm" data-motion="map-search" role="search" aria-label="Search pharmacies and medicines">
+        <div class="field">
+            <label class="form-label" for="mapMedicine">Medicine search</label>
+            <div class="input-line"><i class="bi bi-search"></i><input type="text" id="mapMedicine" placeholder="Optional, for example Dolo, Metformin or Azithral"></div>
+        </div>
+        <div class="field">
+            <label class="form-label" for="mapCity">City or area</label>
+            <div class="input-line"><i class="bi bi-geo-alt"></i><input type="text" id="mapCity" value="{{ city }}" placeholder="Patna, Boring Road"></div>
+        </div>
+        <div class="map-search-actions">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-search"></i> Search</button>
+            <button type="button" class="btn btn-outline" id="clearMapFilters"><i class="bi bi-x-circle"></i> Clear</button>
+        </div>
+    </form>
+
+    <div class="map-explorer-layout">
+        <aside class="card map-results-card" data-motion="map-list">
+            <div class="map-results-head">
+                <div>
+                    <h2 class="mb-0">Nearby pharmacies</h2>
+                    <p class="text-muted small mb-0" id="mapResultHint">{{ shops|length }} verified pharmacies listed.</p>
+                </div>
+                <span class="badge badge-teal" id="mapResultCount">{{ shops|length }}</span>
+            </div>
+            <div class="map-mini-stats">
+                <div><strong id="openCount">0</strong><span>Open now</span></div>
+                <div><strong id="deliveryCount">0</strong><span>Delivery</span></div>
+                <div><strong id="nearestText">—</strong><span>Nearest</span></div>
+            </div>
+            <div class="pharmacy-list" id="pharmacyList"></div>
+        </aside>
+
+        <div class="card map-explorer-card" data-motion="map-canvas">
+            <div class="map-card__head">
+                <div>
+                    <strong>Verified pharmacy map</strong>
+                    <small id="locationStatus">Use your location to sort by distance.</small>
+                </div>
+                <div class="flex gap-2" style="flex-wrap:wrap">
+                    <button type="button" class="btn btn-ghost btn-sm" id="fitMap"><i class="bi bi-arrows-fullscreen"></i> Fit</button>
+                    <a class="btn btn-outline btn-sm" id="searchThisArea" href="{{ url_for('search_page') }}"><i class="bi bi-capsule-pill"></i> Search this area</a>
+                </div>
+            </div>
+            <div class="map-wrap map-explorer-wrap"><div id="pharmacy-map"></div></div>
+        </div>
+    </div>
+</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    const DEFAULT_LAT = {{ DEFAULT_LAT }};
+    const DEFAULT_LNG = {{ DEFAULT_LNG }};
+    const originalShops = {{ shops|tojson }};
+    const map = L.map("pharmacy-map", { scrollWheelZoom: true }).setView([DEFAULT_LAT, DEFAULT_LNG], 12);
+    MF.addTileLayer(map);
+    const layer = L.layerGroup().addTo(map);
+    let userMarker = null;
+    let cityMarker = null;
+    let markers = [];
+    let current = originalShops.map(s => ({...s}));
+
+    const list = document.getElementById("pharmacyList");
+    const cityInput = document.getElementById("mapCity");
+    const medicineInput = document.getElementById("mapMedicine");
+    const status = document.getElementById("locationStatus");
+    const searchArea = document.getElementById("searchThisArea");
+
+    function esc(v){ return MF.escapeHtml ? MF.escapeHtml(v) : String(v ?? ""); }
+    function distance(a,b,c,d){
+        if([a,b,c,d].some(x=>x==null || Number.isNaN(+x))) return null;
+        const R=6371, toRad=x=>x*Math.PI/180;
+        const dLat=toRad(c-a), dLng=toRad(d-b);
+        const h=Math.sin(dLat/2)**2+Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLng/2)**2;
+        return Math.round(R*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))*10)/10;
+    }
+    function hasCoord(value){ return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)); }
+    function directions(shop){
+        if (hasCoord(shop.lat) && hasCoord(shop.lng)) return `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}`;
+        return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((shop.address||"") + " " + (shop.city||""))}`;
+    }
+    function statusBadge(shop){
+        return shop.open_now ? `<span class="badge badge-green"><span class="open-dot"></span> Open</span>` : `<span class="badge badge-red"><span class="open-dot closed"></span> Closed</span>`;
+    }
+    function popup(shop, index){
+        const dist = shop.distance_km != null ? `<div class="small text-muted"><i class="bi bi-geo-alt"></i> ${MF.fmtDistance(shop.distance_km)}</div>` : "";
+        return `<h6>${esc(shop.name)}</h6>
+            <div class="text-muted small mb-1">${esc(shop.address || shop.city || "")}</div>${dist}
+            <div class="flex gap-2 mt-2" style="flex-wrap:wrap">
+                <a class="btn btn-primary btn-sm" href="/pharmacy/${shop.id}"><i class="bi bi-shop"></i> View</a>
+                <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="${directions(shop)}"><i class="bi bi-sign-turn-right"></i> Directions</a>
+            </div>`;
+    }
+    function updateSearchArea(){
+        const params = new URLSearchParams();
+        if (medicineInput.value.trim()) params.set("q", medicineInput.value.trim());
+        if (cityInput.value.trim()) params.set("city", cityInput.value.trim());
+        if (MF.userPos) { params.set("lat", MF.userPos.lat); params.set("lng", MF.userPos.lng); }
+        searchArea.href = `/search${params.toString() ? "?" + params.toString() : ""}`;
+    }
+    function render(shops){
+        layer.clearLayers();
+        markers = [];
+        const bounds = [];
+        const open = shops.filter(s => s.open_now).length;
+        const delivery = shops.filter(s => s.delivery).length;
+        document.getElementById("mapResultCount").textContent = shops.length;
+        document.getElementById("openCount").textContent = open;
+        document.getElementById("deliveryCount").textContent = delivery;
+        document.getElementById("nearestText").textContent = shops[0]?.distance_km != null ? MF.fmtDistance(shops[0].distance_km).replace(" away", "") : "—";
+        document.getElementById("mapResultHint").textContent = MF.userPos ? "Sorted by distance from your selected location." : `${shops.length} verified pharmacies listed.`;
+
+        list.innerHTML = shops.map((shop, i) => {
+            const dist = shop.distance_km != null ? `<span><i class="bi bi-geo-alt"></i> ${MF.fmtDistance(shop.distance_km)}</span>` : `<span>${esc(shop.city || "")}</span>`;
+            const rating = shop.rating ? `${shop.rating.avg || 0} ★ (${shop.rating.count || 0})` : "New";
+            return `<article class="pharmacy-map-item" data-index="${i}">
+                <div class="pharmacy-map-main">
+                    <span class="nearby-icon"><i class="bi bi-shop"></i></span>
+                    <div>
+                        <h3>${esc(shop.name)}</h3>
+                        <p>${esc(shop.address || shop.city || "Address not listed")}</p>
+                        <div class="shop-sub">${dist}<span><i class="bi bi-star-fill text-amber"></i> ${rating}</span>${shop.delivery ? `<span><i class="bi bi-truck"></i> Delivery</span>` : ""}</div>
+                    </div>
+                </div>
+                <div class="pharmacy-map-actions">
+                    ${statusBadge(shop)}
+                    <a href="/pharmacy/${shop.id}" class="btn btn-outline btn-sm"><i class="bi bi-eye"></i> View</a>
+                    <a href="${directions(shop)}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="bi bi-sign-turn-right"></i> Directions</a>
+                </div>
+            </article>`;
+        }).join("") || `<div class="empty"><i class="bi bi-map"></i>No verified pharmacies match this area.</div>`;
+
+        shops.forEach((shop, i) => {
+            if (!hasCoord(shop.lat) || !hasCoord(shop.lng)) return;
+            const marker = L.marker([shop.lat, shop.lng], { icon: MF.makeIcon(i === 0 && MF.userPos ? "amber" : "teal") }).addTo(layer).bindPopup(popup(shop, i));
+            marker.on("click", () => setActive(i, false));
+            markers[i] = marker;
+            bounds.push([shop.lat, shop.lng]);
+        });
+        if (MF.userPos) bounds.push([MF.userPos.lat, MF.userPos.lng]);
+        if (bounds.length) map.fitBounds(bounds, { padding:[36,36], maxZoom: 14 });
+        wireList();
+        updateSearchArea();
+        MF.motion?.revealList?.(list.children, { stagger: .025 });
+    }
+    function wireList(){
+        list.querySelectorAll(".pharmacy-map-item").forEach(item => {
+            item.addEventListener("click", e => {
+                if (e.target.closest("a,button")) return;
+                const idx = +item.dataset.index;
+                setActive(idx, true);
+            });
+        });
+    }
+    function setActive(i, openPopup){
+        list.querySelectorAll(".pharmacy-map-item").forEach((el, idx)=>el.classList.toggle("active", idx === i));
+        const m = markers[i];
+        if (m) {
+            if (openPopup) m.openPopup();
+            map.panTo(m.getLatLng(), { animate: true });
+        }
+    }
+    function sortFromUser(shops){
+        if (!MF.userPos) return shops;
+        return shops.map(s => ({...s, distance_km: distance(MF.userPos.lat, MF.userPos.lng, s.lat, s.lng)}))
+            .sort((a,b)=>(a.distance_km ?? 9999)-(b.distance_km ?? 9999));
+    }
+    function placeUser(){
+        if (!MF.userPos) return;
+        if (userMarker) map.removeLayer(userMarker);
+        const label = MF.userPos.approximate ? "Selected area" : "You are here";
+        userMarker = L.marker([MF.userPos.lat, MF.userPos.lng], { icon: MF.makeIcon("user"), zIndexOffset: 1000 }).addTo(map).bindPopup(`<strong>${label}</strong>`);
+    }
+    function placeCityFocus(place){
+        if (cityMarker) map.removeLayer(cityMarker);
+        if (!hasCoord(place?.lat) || !hasCoord(place?.lng)) return;
+        const title = place.approximate ? "Approximate area" : "Search area";
+        cityMarker = L.marker([place.lat, place.lng], { icon: MF.makeIcon("amber") }).addTo(map)
+            .bindPopup(`<strong>${title}</strong><br><span class="small text-muted">${esc(place.city || place.name || cityInput.value)}</span>`);
+    }
+    async function locateUser(silent=false){ 
+        const btn = document.getElementById("mapAutoLocate");
+        const old = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Checking…';
+        try {
+            const pos = await MF.detectLocation({ city: cityInput.value.trim() });
+            placeUser();
+            const cityName = pos.approximate ? (pos.city || cityInput.value) : await MF.reverseGeocode(pos.lat, pos.lng);
+            if (cityName) cityInput.value = cityName;
+            MF.location?.save?.({ city: cityName || cityInput.value, lat: pos.lat, lng: pos.lng, approximate: !!pos.approximate });
+            status.textContent = pos.approximate ? "Using an approximate area because precise location is blocked." : "Sorted from your selected location.";
+            try {
+                const r = await fetch(`/api/shops/nearby?lat=${encodeURIComponent(pos.lat)}&lng=${encodeURIComponent(pos.lng)}`);
+                const j = await r.json();
+                current = j.ok ? j.shops : sortFromUser(originalShops);
+            } catch { current = sortFromUser(originalShops); }
+            render(current);
+            if (!silent) MF.toast(pos.approximate ? "Using an approximate area because precise location is blocked." : "Location set and pharmacies sorted by distance.", pos.approximate ? "info" : "success");
+        } catch {
+            if (!silent) MF.toast("Location permission was blocked. You can still search by city or area.", "warning");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = old;
+        }
+    }
+    async function applyCityFilter(){
+        const raw = cityInput.value.trim();
+        const q = raw.toLowerCase();
+        if (!q) {
+            if (cityMarker) map.removeLayer(cityMarker);
+            cityMarker = null;
+        }
+        current = originalShops.filter(shop => !q || `${shop.city || ""} ${shop.address || ""} ${shop.name || ""}`.toLowerCase().includes(q));
+        current = sortFromUser(current);
+        render(current);
+        if (q) {
+            try {
+                const place = (await MF.geocode(raw))[0];
+                if (hasCoord(place?.lat) && hasCoord(place?.lng)) {
+                    placeCityFocus(place);
+                    if (!current.length) map.flyTo([place.lat, place.lng], 13);
+                    status.textContent = place.approximate
+                        ? `Centered near ${place.city || raw} using local pharmacy data.`
+                        : `Centered near ${place.city || raw} using OpenStreetMap.`;
+                }
+            } catch {}
+        } else {
+            status.textContent = "Use your location to sort by distance.";
+        }
+        const next = q ? `/map?city=${encodeURIComponent(raw)}` : "/map";
+        history.replaceState(null, "", next);
+    }
+
+    document.getElementById("mapAutoLocate").addEventListener("click", () => locateUser(false));
+    document.getElementById("fitMap").addEventListener("click", () => render(current));
+    document.getElementById("clearMapFilters").addEventListener("click", () => {
+        cityInput.value = "";
+        medicineInput.value = "";
+        if (cityMarker) map.removeLayer(cityMarker);
+        cityMarker = null;
+        status.textContent = "Use your location to sort by distance.";
+        current = sortFromUser(originalShops);
+        render(current);
+        history.replaceState(null, "", "/map");
+    });
+    cityInput.addEventListener("input", () => { clearTimeout(cityInput._t); cityInput._t = setTimeout(applyCityFilter, 180); });
+    medicineInput.addEventListener("input", updateSearchArea);
+    document.getElementById("pharmacyMapForm").addEventListener("submit", e => {
+        e.preventDefault();
+        if (medicineInput.value.trim()) { location.href = searchArea.href; return; }
+        applyCityFilter();
+    });
+
+    const saved = MF.location?.load?.();
+    if (hasCoord(saved?.lat) && hasCoord(saved?.lng)) {
+        MF.userPos = { lat: +saved.lat, lng: +saved.lng, approximate: !!saved.approximate, source: saved.source || "saved" };
+        if (!cityInput.value && saved.city) cityInput.value = saved.city;
+        placeUser();
+        current = sortFromUser(current);
+    }
+    render(current);
+    if (cityInput.value.trim()) applyCityFilter();
+
+    if (navigator.permissions?.query) {
+        navigator.permissions.query({ name: "geolocation" }).then(result => {
+            if (result.state === "granted") locateUser(true);
+        }).catch(()=>{});
+    }
+})();
+</script>
+{% endblock %}

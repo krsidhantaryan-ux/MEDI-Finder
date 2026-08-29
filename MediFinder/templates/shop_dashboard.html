@@ -6,35 +6,50 @@
 <section class="section-tight" style="padding-top:1.5rem">
 <div class="container">
     <!-- Header -->
-    <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
-        <div>
-            <div class="flex gap-2 center" style="flex-wrap:wrap">
-                <h1 class="mb-0" style="font-size:1.7rem">{{ shop.name }}</h1>
-                {% if shop.status == 'Verified' %}
-                <span class="badge badge-green"><i class="bi bi-patch-check-fill"></i> Verified</span>
-                {% elif shop.status == 'Rejected' %}
-                <span class="badge badge-red"><i class="bi bi-x-circle-fill"></i> Rejected</span>
-                {% else %}
-                <span class="badge badge-amber"><i class="bi bi-clock-history"></i> Pending verification</span>
-                {% endif %}
+    <div class="dashboard-hero" data-motion="shop-dashboard-hero">
+        <div class="flex between center" style="flex-wrap:wrap;gap:1rem">
+            <div>
+                <span class="eyebrow"><i class="bi bi-speedometer2"></i> Pharmacy operations</span>
+                <div class="flex gap-2 center mt-2" style="flex-wrap:wrap">
+                    <h1 class="mb-0" style="font-size:clamp(1.9rem,4vw,3.2rem)">{{ shop.name }}</h1>
+                    {% if shop.status == 'Verified' %}
+                    <span class="badge badge-green"><i class="bi bi-patch-check-fill"></i> Verified</span>
+                    {% elif shop.status == 'Rejected' %}
+                    <span class="badge badge-red"><i class="bi bi-x-circle-fill"></i> Rejected</span>
+                    {% elif shop.status == 'Suspended' %}
+                    <span class="badge badge-red"><i class="bi bi-slash-circle"></i> Suspended</span>
+                    {% else %}
+                    <span class="badge badge-amber"><i class="bi bi-clock-history"></i> Pending review</span>
+                    {% endif %}
+                </div>
+                <p class="text-muted small mb-0 mt-1">
+                    <i class="bi bi-geo-alt"></i> {{ shop.city or 'Location not set' }}
+                    {% if shop.status == 'Verified' %}
+                    · <a href="{{ url_for('shop_profile', shop_id=shop.id) }}" target="_blank">View public profile <i class="bi bi-box-arrow-up-right"></i></a>
+                    {% else %}
+                    · Public profile appears after verification
+                    {% endif %}
+                </p>
             </div>
-            <p class="text-muted small mb-0 mt-1">
-                <i class="bi bi-geo-alt"></i> {{ shop.city or 'Location not set' }}
-                · <a href="{{ url_for('shop_profile', shop_id=shop.id) }}" target="_blank">View public profile <i class="bi bi-box-arrow-up-right"></i></a>
-            </p>
+            <div class="flex gap-2" style="flex-wrap:wrap">
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('addForm').scrollIntoView({behavior:'smooth'})"><i class="bi bi-plus-lg"></i> Add inventory</button>
+                <a href="{{ url_for('shop_logout') }}" class="btn btn-outline btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            </div>
         </div>
-        <div class="flex gap-2">
-            <a href="{{ url_for('shop_logout') }}" class="btn btn-outline btn-sm"><i class="bi bi-box-arrow-right"></i> Logout</a>
+        <div class="kpi-strip">
+            <div class="kpi-mini"><strong>{{ stats.in_stock or 0 }}</strong><span>In-stock items</span></div>
+            <div class="kpi-mini"><strong>{{ res_stats.pending or 0 }}</strong><span>Pending holds</span></div>
+            <div class="kpi-mini"><strong>{{ stats.expiring or 0 }}</strong><span>Expiring soon</span></div>
         </div>
     </div>
 
     {% if shop.status == 'Pending' %}
-    <div class="card mb-4" style="border-left:4px solid var(--amber-500);background:var(--amber-50)">
+    <div class="card mb-4" style="border-left:4px solid var(--amber);background:var(--amber-soft)">
         <div class="flex gap-3 center">
             <i class="bi bi-hourglass-split text-amber" style="font-size:1.5rem"></i>
             <div>
-                <strong>Your store is awaiting verification.</strong>
-                <div class="small text-muted">You can add inventory now. Your store will appear in public search once our team approves your documents.</div>
+                <strong>Your store is awaiting review.</strong>
+                <div class="small text-muted">You can add inventory now. Your store appears in public search after documents are approved.</div>
             </div>
         </div>
     </div>
@@ -49,7 +64,9 @@
                 {% if res_stats.pending %}<span class="badge badge-amber" style="margin-left:auto">{{ res_stats.pending }}</span>{% endif %}
             </a>
             <a href="#profile"><i class="bi bi-shop-window"></i> Store profile</a>
+            {% if shop.status == 'Verified' %}
             <a href="{{ url_for('shop_profile', shop_id=shop.id) }}" target="_blank"><i class="bi bi-eye"></i> Public page</a>
+            {% endif %}
         </aside>
 
         <main>
@@ -58,11 +75,46 @@
                 <div class="dash-stat"><i class="bi bi-box-seam ic"></i><div class="v">{{ stats.in_stock or 0 }}</div><div class="l">Items in stock</div></div>
                 <div class="dash-stat"><i class="bi bi-currency-rupee ic"></i><div class="v">{{ "₹%.0f"|format(stats.inventory_value or 0) }}</div><div class="l">Stock value</div></div>
                 <div class="dash-stat"><i class="bi bi-bag-check ic"></i><div class="v">{{ res_stats.total or 0 }}</div><div class="l">Total reservations</div></div>
-                <div class="dash-stat"><i class="bi bi-exclamation-triangle ic" style="color:var(--amber-500)"></i><div class="v">{{ stats.expiring or 0 }}</div><div class="l">Expiring in 30d</div></div>
+                <div class="dash-stat"><i class="bi bi-exclamation-triangle ic" style="color:var(--amber)"></i><div class="v">{{ stats.expiring or 0 }}</div><div class="l">Expiring in 30 days</div></div>
+            </div>
+
+            <div class="ops-grid" data-motion="ops-grid">
+                <section class="card">
+                    <div class="flex between center" style="gap:.75rem">
+                        <div><h2 style="font-size:1rem" class="mb-1"><i class="bi bi-exclamation-triangle text-amber"></i> Low stock queue</h2><p class="small text-muted mb-0">Prioritize refill updates before customers arrive.</p></div>
+                        <span class="badge badge-amber">{{ low_stock|length }}</span>
+                    </div>
+                    <div class="ops-list">
+                        {% for item in low_stock %}
+                        <div class="ops-item">
+                            <div><strong>{{ item.med_name }}</strong><small>{{ item.dosage or item.salt_composition or 'No strength listed' }}</small></div>
+                            <span class="badge {{ 'badge-red' if item.stock_quantity == 0 else 'badge-amber' }}">{{ item.stock_quantity }} left</span>
+                        </div>
+                        {% else %}
+                        <div class="empty" style="padding:1rem"><i class="bi bi-check2-circle"></i> No low-stock items.</div>
+                        {% endfor %}
+                    </div>
+                </section>
+                <section class="card">
+                    <div class="flex between center" style="gap:.75rem">
+                        <div><h2 style="font-size:1rem" class="mb-1"><i class="bi bi-calendar2-x text-amber"></i> Expiring soon</h2><p class="small text-muted mb-0">Review items with near expiry dates.</p></div>
+                        <span class="badge badge-amber">{{ expiring_items|length }}</span>
+                    </div>
+                    <div class="ops-list">
+                        {% for item in expiring_items %}
+                        <div class="ops-item">
+                            <div><strong>{{ item.med_name }}</strong><small>Batch {{ item.batch_no or '—' }}</small></div>
+                            <span class="badge badge-amber">{{ item.expiry_date }}</span>
+                        </div>
+                        {% else %}
+                        <div class="empty" style="padding:1rem"><i class="bi bi-check2-circle"></i> No near-expiry items.</div>
+                        {% endfor %}
+                    </div>
+                </section>
             </div>
 
             <!-- Inventory -->
-            <section id="inventory" class="card mb-4" style="padding:1.5rem">
+            <section id="inventory" class="card mb-4" style="padding:1.5rem" data-motion="inventory-section">
                 <div class="flex between center" style="flex-wrap:wrap;gap:.75rem;margin-bottom:1rem">
                     <h2 class="mb-0" style="font-size:1.25rem"><i class="bi bi-box-seam text-teal"></i> Inventory</h2>
                     <button class="btn btn-primary btn-sm" onclick="document.getElementById('addForm').scrollIntoView({behavior:'smooth'})"><i class="bi bi-plus-lg"></i> Add item</button>
@@ -79,7 +131,7 @@
                             <td>
                                 <strong>{{ item.med_name }}</strong>
                                 <div class="small text-muted">{{ item.salt_composition }}{% if item.dosage %} · {{ item.dosage }}{% endif %}</div>
-                                {% if item.prescription %}<span class="tag tag-rx" style="margin-top:.2rem">Rx</span>{% endif %}
+                                {% if item.prescription %}<span class="tag tag-rx" style="margin-top:.2rem">Prescription</span>{% endif %}
                             </td>
                             <td><span class="small">{{ item.category_name or '—' }}</span></td>
                             <td>
@@ -110,18 +162,18 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="empty"><i class="bi bi-box-seam"></i> No inventory yet — add your first medicine below.</td></tr>
+                        <tr><td colspan="6" class="empty"><i class="bi bi-box-seam"></i> No inventory yet. Add your first medicine below.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
                 </div>
 
                 <!-- Add form -->
-                <form id="addForm" method="POST" action="{{ url_for('add_inventory') }}" class="card mt-4" style="background:var(--ink-50);padding:1.25rem">
+                <form id="addForm" method="POST" action="{{ url_for('add_inventory') }}" class="card mt-4" style="background:var(--surface-subtle);padding:1.25rem">
                     <h3 style="font-size:1rem" class="mb-3"><i class="bi bi-plus-circle text-success"></i> Add new medicine</h3>
                     <div class="row" style="gap:0">
-                        <div style="flex:2 1 220px"><label class="form-label">Brand name *</label><input name="med_name" class="form-control" required placeholder="e.g. Dolo 650"></div>
-                        <div style="flex:2 1 180px"><label class="form-label">Salt composition</label><input name="salt_composition" class="form-control" placeholder="e.g. Paracetamol"></div>
+                        <div style="flex:2 1 220px"><label class="form-label">Brand name <span class="req">required</span></label><input name="med_name" class="form-control" required placeholder="For example, Dolo 650"></div>
+                        <div style="flex:2 1 180px"><label class="form-label">Salt composition</label><input name="salt_composition" class="form-control" placeholder="For example, Paracetamol"></div>
                         <div style="flex:1 1 160px"><label class="form-label">Category</label>
                             <select name="category_id" class="form-select">
                                 <option value="">—</option>
@@ -131,14 +183,14 @@
                     </div>
                     <div class="row mt-3" style="gap:0">
                         <div style="flex:1 1 160px"><label class="form-label">Manufacturer</label><input name="manufacturer" class="form-control"></div>
-                        <div style="flex:1 1 160px"><label class="form-label">Dosage / pack</label><input name="dosage" class="form-control" placeholder="650mg, 15 tabs"></div>
+                        <div style="flex:1 1 160px"><label class="form-label">Strength or pack</label><input name="dosage" class="form-control" placeholder="650mg, 15 tabs"></div>
                         <div style="flex:1 1 120px"><label class="form-label">Batch no.</label><input name="batch_no" class="form-control"></div>
                         <div style="flex:1 1 130px"><label class="form-label">Expiry</label><input type="date" name="expiry_date" class="form-control"></div>
                     </div>
                     <div class="row mt-3" style="gap:0">
                         <div style="flex:1 1 100px"><label class="form-label">MRP ₹</label><input type="number" step="0.01" name="mrp" class="form-control" value="0"></div>
                         <div style="flex:1 1 100px"><label class="form-label">Selling price ₹</label><input type="number" step="0.01" name="price" class="form-control" value="0"></div>
-                        <div style="flex:1 1 100px"><label class="form-label">Stock qty</label><input type="number" name="stock_quantity" class="form-control" value="10"></div>
+                        <div style="flex:1 1 100px"><label class="form-label">Stock quantity</label><input type="number" name="stock_quantity" class="form-control" value="10"></div>
                         <div style="flex:1 1 140px;display:flex;align-items:flex-end">
                             <label class="form-check"><input type="checkbox" name="prescription"> Prescription required</label>
                         </div>
@@ -148,12 +200,12 @@
             </section>
 
             <!-- Reservations -->
-            <section id="reservations" class="card mb-4" style="padding:1.5rem">
+            <section id="reservations" class="card mb-4" style="padding:1.5rem" data-motion="reservations-section">
                 <h2 style="font-size:1.25rem"><i class="bi bi-bag-check text-teal"></i> Customer reservations</h2>
-                <p class="text-muted small">Pending holds expire automatically after 2 hours. Confirm when a customer is on the way, collect when they arrive.</p>
+                <p class="text-muted small">Pending holds expire automatically after 2 hours. Confirm when a customer is on the way and mark collected when they arrive.</p>
                 <div class="table-wrap">
                     <table class="tbl">
-                        <thead><tr><th>Medicine</th><th>Customer</th><th>Qty</th><th>Held until</th><th>Status</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Medicine</th><th>Customer</th><th>Quantity</th><th>Held until</th><th>Status</th><th>Actions</th></tr></thead>
                         <tbody>
                         {% for r in reservations %}
                         <tr>
@@ -164,7 +216,10 @@
                                 {% if r.note %}<div class="small text-muted"><i class="bi bi-chat-left-text"></i> {{ r.note }}</div>{% endif %}
                             </td>
                             <td>{{ r.quantity }}</td>
-                            <td class="small">{{ r.held_until[:16] if r.held_until else '—' }}<br><span class="text-muted">{{ r.created_at[:16] }}</span></td>
+                            <td class="small">
+                                {{ r.held_until[:16] if r.held_until else '—' }}<br><span class="text-muted">{{ r.created_at[:16] }}</span>
+                                {% if r.status in ['Pending','Confirmed'] and r.held_until %}<span class="hold-countdown" data-held-until="{{ r.held_until }}">Checking hold time…</span>{% endif %}
+                            </td>
                             <td>
                                 {% if r.status == 'Pending' %}<span class="badge badge-amber">Pending</span>
                                 {% elif r.status == 'Confirmed' %}<span class="badge badge-teal">Confirmed</span>
@@ -183,7 +238,7 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="6" class="empty"><i class="bi bi-bag"></i> No reservations yet. They'll appear here when customers hold medicines.</td></tr>
+                        <tr><td colspan="6" class="empty"><i class="bi bi-bag"></i> No reservations yet. New pickup holds will appear here.</td></tr>
                         {% endfor %}
                         </tbody>
                     </table>
@@ -191,9 +246,9 @@
             </section>
 
             <!-- Profile / location -->
-            <section id="profile" class="card" style="padding:1.5rem">
-                <h2 style="font-size:1.25rem"><i class="bi bi-shop-window text-teal"></i> Store profile &amp; location</h2>
-                <p class="text-muted small">Your public profile and map location. Customers see these on the search map.</p>
+            <section id="profile" class="card" style="padding:1.5rem" data-motion="profile-section">
+                <h2 style="font-size:1.25rem"><i class="bi bi-shop-window text-teal"></i> Store profile and location</h2>
+                <p class="text-muted small">Customers see this profile and map location in search results.</p>
 
                 <form method="POST" action="{{ url_for('shop_profile_update') }}" enctype="multipart/form-data" id="profileForm">
                     <div class="row" style="gap:0">
@@ -208,7 +263,7 @@
                         <div style="flex:2 1 280px"><label class="form-label">Street address</label><input name="address" class="form-control" value="{{ shop.address or '' }}"></div>
                         <div style="flex:1 1 140px"><label class="form-label">City</label><input name="city" id="cityField" class="form-control" value="{{ shop.city or '' }}"></div>
                         <div style="flex:1 1 120px"><label class="form-label">State</label><input name="state" class="form-control" value="{{ shop.state or '' }}"></div>
-                        <div style="flex:1 1 100px"><label class="form-label">Pincode</label><input name="pincode" class="form-control" value="{{ shop.pincode or '' }}"></div>
+                        <div style="flex:1 1 100px"><label class="form-label">PIN code</label><input name="pincode" class="form-control" value="{{ shop.pincode or '' }}"></div>
                     </div>
 
                     <div class="row mt-3" style="gap:0">
@@ -223,18 +278,18 @@
                     <label class="form-label mt-3">Update shop photo</label>
                     <input type="file" name="shop_photo" accept="image/*" class="form-control">
 
-                    <h3 class="mt-4 mb-2" style="font-size:1rem"><i class="bi bi-pin-map"></i> Pin your location</h3>
+                    <h3 class="mt-4 mb-2" style="font-size:1rem"><i class="bi bi-pin-map"></i> Set your map pin</h3>
                     <div class="row" style="gap:0">
                         <div style="flex:2 1 320px">
                             <div class="input-group mb-2">
-                                <input type="text" id="addrSearch" class="form-control" placeholder="Search address, then click map to set pin">
+                                <input type="text" id="addrSearch" class="form-control" placeholder="Search an address or click the map to set the pin">
                                 <button type="button" class="btn btn-primary" id="addrBtn"><i class="bi bi-search"></i></button>
                             </div>
                             <div id="admin-map" style="height:280px;border-radius:var(--radius);border:1px solid var(--line)"></div>
                         </div>
                         <div style="flex:1 1 180px;display:flex;flex-direction:column;gap:.75rem">
-                            <div><label class="form-label">Latitude</label><input type="text" name="lat" id="latField" class="form-control" value="{{ shop.lat or '' }}" readonly></div>
-                            <div><label class="form-label">Longitude</label><input type="text" name="lng" id="lngField" class="form-control" value="{{ shop.lng or '' }}" readonly></div>
+                            <div><label class="form-label">Latitude</label><input type="text" name="lat" id="latField" class="form-control" value="{{ shop.lat if shop.lat is not none else '' }}" readonly></div>
+                            <div><label class="form-label">Longitude</label><input type="text" name="lng" id="lngField" class="form-control" value="{{ shop.lng if shop.lng is not none else '' }}" readonly></div>
                             <button type="button" class="btn btn-outline" id="useMyLoc"><i class="bi bi-crosshair"></i> Use my location</button>
                             <small class="form-hint">Click the map or drag the pin to set your exact storefront location.</small>
                         </div>
@@ -259,7 +314,7 @@ document.querySelectorAll(".stock-input").forEach(inp=>{
             method:"POST", headers:{"Content-Type":"application/json"},
             body: JSON.stringify({ stock_quantity: qty })
         });
-        if(r.ok){ MF.toast("Stock updated","success"); inp.closest("tr").style.background="var(--teal-50)"; setTimeout(()=>inp.closest("tr").style.background="",800);}
+        if(r.ok){ MF.toast("Stock updated","success"); inp.closest("tr").style.background="var(--primary-soft)"; setTimeout(()=>inp.closest("tr").style.background="",800);}
         else MF.toast("Update failed","error");
     });
 });
@@ -297,7 +352,7 @@ document.querySelectorAll(".dash-side a").forEach(a=>{
 
 // ---- Map for location pinning ----
 (function(){
-    const startLat = {{ shop.lat or DEFAULT_LAT }}, startLng = {{ shop.lng or DEFAULT_LNG }};
+    const startLat = {{ shop.lat if shop.lat is not none else DEFAULT_LAT }}, startLng = {{ shop.lng if shop.lng is not none else DEFAULT_LNG }};
     const map = L.map("admin-map").setView([startLat, startLng], {{ 15 if shop.lat else 12 }});
     MF.addTileLayer(map);
     const marker = L.marker([startLat, startLng], { draggable:true, icon: MF.makeIcon("amber") }).addTo(map);
@@ -314,16 +369,24 @@ document.querySelectorAll(".dash-side a").forEach(a=>{
     document.getElementById("addrBtn").addEventListener("click", async ()=>{
         const q = document.getElementById("addrSearch").value.trim();
         if(!q) return;
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
-        const d = await r.json();
-        if(d[0]){ const la=+d[0].lat, ln=+d[0].lon; map.setView([la,ln],15); setLatLng({lat:la,lng:ln}, false);
-            document.getElementById("cityField").value = (d[0].display_name||"").split(",")[0] || "";
-            MF.toast("Location set","success");
-        } else MF.toast("Address not found","warning");
+        try {
+            const place = (await MF.geocode(q))[0];
+            if(place){
+                const la=+place.lat, ln=+place.lng;
+                map.setView([la,ln], place.approximate ? 13 : 15);
+                setLatLng({lat:la,lng:ln}, false);
+                document.getElementById("cityField").value = place.city || q;
+                MF.toast(place.approximate ? "Approximate area set. Drag or click to mark the exact storefront." : "Location set from OpenStreetMap.", place.approximate ? "info" : "success");
+            } else MF.toast("Address not found","warning");
+        } catch { MF.toast("Address lookup is unavailable right now.", "warning"); }
     });
     document.getElementById("useMyLoc").addEventListener("click", async ()=>{
-        try{ const p = await MF.getUserLocation(); map.setView([p.lat,p.lng],15); setLatLng(p, true); MF.toast("Location set","success");}
-        catch{ MF.toast("Couldn't get location","error"); }
+        try{
+            const p = await MF.detectLocation({ city: document.getElementById("cityField").value.trim() });
+            map.setView([p.lat,p.lng],15); setLatLng(p, !p.approximate);
+            MF.toast(p.approximate ? "Approximate area set. Drag or click the map to mark the exact storefront." : "Location set", p.approximate ? "info" : "success");
+        }
+        catch{ MF.toast("Could not get location","error"); }
     });
 })();
 </script>

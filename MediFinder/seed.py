@@ -19,7 +19,7 @@ DEMO_SHOPS = [
         "address": "Shop 12, Frazer Road, Near Dak Bungalow",
         "lat": 25.6110, "lng": 85.1430,
         "open_time": "08:00", "close_time": "23:00", "delivery": 1,
-        "description": "24/7 chain pharmacy with full prescription, surgical, and wellness range.",
+        "description": "Large chain pharmacy with prescription, surgical and wellness essentials.",
         "inventory": [
             ("Dolo 650", "Paracetamol", "Tablets & Capsules", "Micro Labs", "650mg, 15 tablets", 32.00, 30.50, 120, 0),
             ("Azithral 500", "Azithromycin", "Tablets & Capsules", "Alembic", "500mg, 5 tablets", 119.00, 95.00, 40, 1),
