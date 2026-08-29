@@ -1,67 +1,97 @@
 {% extends "base.html" %}
 {% set page_map = true %}
-{% block title %}Search results — MediFinder{% endblock %}
+{% block title %}Search medicine availability — MediFinder{% endblock %}
+{% block meta_desc %}Compare medicine price, stock, distance, dosage and pharmacy pickup options near you.{% endblock %}
 
 {% block content %}
-<section class="section-tight" style="padding-top:1.5rem">
+<section class="section-tight search-page">
 <div class="container">
-    <!-- Search bar -->
-    <form id="searchForm" class="searchbar mb-3" style="grid-template-columns:1fr 200px 170px auto">
-        <div class="field">
-            <i class="bi bi-search"></i>
-            <input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off">
-            <div class="suggest" id="suggestBox"></div>
+    <div class="search-hero card" data-motion="search-shell">
+        <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+            <div>
+                <span class="eyebrow"><i class="bi bi-search-heart"></i> Local availability search</span>
+                <h1 class="mt-2 mb-1">Compare verified pharmacy stock.</h1>
+                <p class="text-muted mb-0">Use medicine name, salt, strength and location to find the best nearby pickup option.</p>
+            </div>
+            <a href="{{ url_for('prescription_upload') }}" class="btn btn-outline"><i class="bi bi-file-earmark-medical"></i> Upload prescription</a>
         </div>
-        <div class="field" style="border-left:1px solid var(--line)">
-            <i class="bi bi-geo-alt"></i>
-            <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area">
-            <button type="button" class="loc-btn" id="locateBtn" title="Use my location"><i class="bi bi-crosshair"></i></button>
-        </div>
-        <select id="sort" name="sort" class="form-select" style="border:0;background:transparent;font-size:.9rem">
-            <option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
-            <option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low to high</option>
-            <option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high to low</option>
-            <option value="stock" {{ 'selected' if sort=='stock' }}>Most in stock</option>
-        </select>
-        <button class="btn btn-primary btn-search" type="submit"><i class="bi bi-arrow-right"></i> Search</button>
-    </form>
 
-    <!-- Filters -->
-    <div class="flex gap-2 center" style="flex-wrap:wrap;justify-content:space-between;margin-bottom:1rem">
-        <div class="chips" id="catChips">
-            <button type="button" class="chip {{ '' if category else 'active' }}" data-cat="">All categories</button>
+        <form id="searchForm" class="searchbar searchbar-results" role="search" aria-label="Search medicine availability">
+            <div class="field field-medicine">
+                <i class="bi bi-search"></i>
+                <input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt, for example Dolo or Metformin" autocomplete="off" aria-label="Medicine or salt">
+                <div class="suggest" id="suggestBox"></div>
+            </div>
+            <div class="field field-location">
+                <i class="bi bi-geo-alt"></i>
+                <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area" aria-label="City or area">
+                <button type="button" class="loc-btn" id="locateBtn" title="Use my location" aria-label="Use my location"><i class="bi bi-crosshair"></i> Use location</button>
+            </div>
+            <div class="field field-dosage">
+                <i class="bi bi-capsule"></i>
+                <input type="text" id="dosage" name="dosage" value="{{ dosage }}" placeholder="Strength" aria-label="Strength or dosage">
+            </div>
+            <div class="field field-qty">
+                <i class="bi bi-box"></i>
+                <input type="number" id="quantity" name="quantity" min="1" max="99" value="{{ quantity }}" aria-label="Quantity">
+            </div>
+            <select id="sort" name="sort" class="form-select" aria-label="Sort results">
+                <option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
+                <option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Lowest price</option>
+                <option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Highest price</option>
+                <option value="stock" {{ 'selected' if sort=='stock' }}>Most stock</option>
+            </select>
+            <button class="btn btn-primary btn-search" type="submit"><i class="bi bi-search"></i> Search</button>
+        </form>
+    </div>
+
+    <div class="filter-panel" data-motion="filters">
+        <div class="chips" id="catChips" aria-label="Filter by category">
+            <button type="button" class="chip {{ '' if category else 'active' }}" data-cat="">All</button>
             {% for c in categories %}
             <button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}">
                 <i class="bi {{ c.icon }}"></i> {{ c.name }}
             </button>
             {% endfor %}
         </div>
-        <div class="flex gap-2 center" style="font-size:.85rem">
+        <div class="flex gap-2 center" style="font-size:.85rem;flex-wrap:wrap">
             <label class="form-check" style="margin:0"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }}> In stock only</label>
-            <select id="rx" class="form-select" style="width:auto;padding:.4rem .6rem;font-size:.85rem">
-                <option value="">Rx &amp; OTC</option>
+            <select id="rx" class="form-select" style="width:auto;padding:.45rem .8rem;font-size:.85rem" aria-label="Prescription filter">
+                <option value="">Prescription &amp; OTC</option>
                 <option value="0" {{ 'selected' if rx=='0' }}>OTC only</option>
-                <option value="1" {{ 'selected' if rx=='1' }}>Prescription</option>
+                <option value="1" {{ 'selected' if rx=='1' }}>Prescription only</option>
             </select>
         </div>
     </div>
 
     <div class="results-layout">
-        <!-- Results column -->
-        <div>
-            <div class="flex between center mb-2">
-                <h2 class="mb-0" style="font-size:1.2rem" id="resultTitle">Searching...</h2>
-                <span class="badge badge-teal" id="resultCount">—</span>
+        <div data-motion="results-column">
+            <div class="results-toolbar">
+                <div>
+                    <h2 class="mb-0" id="resultTitle">Search results</h2>
+                    <p class="text-muted small mb-0" id="resultSub">Select a result to focus its map pin. Hold available stock for pickup after phone confirmation.</p>
+                </div>
+                <span class="badge badge-teal" id="resultCount" aria-live="polite">—</span>
             </div>
-            <div class="results-list" id="resultsList">
+            <div class="results-list" id="resultsList" aria-live="polite">
                 <div class="empty"><i class="bi bi-search"></i> Enter a medicine name above to see live availability.</div>
             </div>
         </div>
 
-        <!-- Map column -->
-        <div class="map-wrap">
-            <div id="map"></div>
-        </div>
+        <aside class="map-column" data-motion="map">
+            <div class="card map-card">
+                <div class="map-card__head">
+                    <div><strong>Availability map</strong><small id="mapHint">Use your location for nearest-first results.</small></div>
+                    <button type="button" class="btn btn-ghost btn-sm" id="mapLocateBtn"><i class="bi bi-crosshair"></i> Use location</button>
+                </div>
+                <div class="map-wrap"><div id="map"></div></div>
+            </div>
+            <div class="card helper-card mt-3">
+                <h3>Have a complete prescription?</h3>
+                <p class="text-muted small">Upload it once. A verified pharmacy can review availability and contact you if anything needs clarification.</p>
+                <a href="{{ url_for('prescription_upload') }}" class="btn btn-outline btn-block"><i class="bi bi-upload"></i> Upload prescription</a>
+            </div>
+        </aside>
     </div>
 </div>
 </section>
@@ -70,33 +100,37 @@
 {% block scripts %}
 <script>
 const INIT = {
-    q: {{ query|tojson }}, city: {{ city|tojson }},
+    q: {{ query|tojson }}, city: {{ city|tojson }}, dosage: {{ dosage|tojson }}, quantity: {{ quantity|tojson }},
     cat: {{ (category|int if category else 0)|tojson }},
-    lat: {{ (lat|float if lat else '')|tojson }},
-    lng: {{ (lng|float if lng else '')|tojson }},
+    lat: {{ (lat|float if lat is not none else '')|tojson }},
+    lng: {{ (lng|float if lng is not none else '')|tojson }},
     sort: {{ sort|tojson }}, inStock: {{ (1 if in_stock else 0)|tojson }}, rx: {{ rx|tojson }}
 };
 
-let map, markers = {}, userMarker, activeCard = null, lastResults = [];
+let map, markerLayer, userMarker, markerMap = [], lastResults = [];
+function hasCoord(value){ return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)); }
 
 (function init(){
     map = L.map("map", { zoomControl: true, scrollWheelZoom: true }).setView([25.611, 85.143], 12);
     MF.addTileLayer(map);
-    markers.layer = L.layerGroup().addTo(map);
+    markerLayer = L.layerGroup().addTo(map);
 
-    // Try to restore / get location
-    if (INIT.lat && INIT.lng) {
-        MF.userPos = { lat: +INIT.lat, lng: +INIT.lng };
+    const saved = MF.location?.load?.();
+    if (hasCoord(INIT.lat) && hasCoord(INIT.lng)) {
+        MF.userPos = { lat: +INIT.lat, lng: +INIT.lng, approximate: false, source: "url" };
+        MF.location?.save?.({ lat: INIT.lat, lng: INIT.lng, city: INIT.city });
         placeUser();
-    } else {
-        MF.getUserLocation().then(pos=>{ placeUser(); runSearch(); }).catch(()=>{});
+    } else if (hasCoord(saved?.lat) && hasCoord(saved?.lng)) {
+        MF.userPos = { lat: +saved.lat, lng: +saved.lng, approximate: !!saved.approximate, source: saved.source || "saved" };
+        if (!document.getElementById("city").value && saved.city) document.getElementById("city").value = saved.city;
+        placeUser();
     }
 
     document.getElementById("searchForm").addEventListener("submit", e=>{ e.preventDefault(); runSearch(); });
     document.getElementById("locateBtn").addEventListener("click", locateUser);
-    document.getElementById("sort").addEventListener("change", runSearch);
-    document.getElementById("inStock").addEventListener("change", runSearch);
-    document.getElementById("rx").addEventListener("change", runSearch);
+    document.getElementById("mapLocateBtn").addEventListener("click", locateUser);
+    ["sort", "inStock", "rx"].forEach(id => document.getElementById(id).addEventListener("change", runSearch));
+    ["dosage", "quantity", "city"].forEach(id => document.getElementById(id).addEventListener("keydown", e => { if(e.key === "Enter") runSearch(); }));
     document.getElementById("catChips").addEventListener("click", e=>{
         const c = e.target.closest(".chip"); if(!c) return;
         document.querySelectorAll("#catChips .chip").forEach(x=>x.classList.remove("active"));
@@ -104,53 +138,89 @@ let map, markers = {}, userMarker, activeCard = null, lastResults = [];
         runSearch();
     });
 
-    // autocomplete
-    const q = document.getElementById("q"), box = document.getElementById("suggestBox");
-    let items=[];
-    q.addEventListener("input", async()=>{
-        if(q.value.trim().length<2){box.classList.remove("open");return;}
-        items = await (await fetch(`/api/autocomplete?q=${encodeURIComponent(q.value.trim())}`)).json();
-        if(!items.length){box.classList.remove("open");return;}
-        box.innerHTML = items.map((it,i)=>`<div class="suggest-item" data-i="${i}"><span><strong>${it.med_name}</strong> <small>${it.salt_composition||""}</small></span></div>`).join("");
-        box.classList.add("open");
-        box.querySelectorAll(".suggest-item").forEach(el=>el.addEventListener("mousedown",()=>{q.value=items[+el.dataset.i].med_name;box.classList.remove("open");runSearch();}));
-    });
-    q.addEventListener("blur",()=>setTimeout(()=>box.classList.remove("open"),150));
-
-    if (INIT.q) runSearch();
+    wireAutocomplete();
+    runSearch();
 })();
 
-function placeUser(){
-    if(!MF.userPos) return;
-    if(userMarker) map.removeLayer(userMarker);
-    userMarker = L.marker([MF.userPos.lat, MF.userPos.lng], { icon: MF.makeIcon("user"), zIndexOffset: 1000 }).addTo(map)
-        .bindPopup("<strong>You are here</strong>");
+function esc(v){
+    return String(v ?? "").replace(/[&<>'"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[ch]));
 }
-
-async function locateUser(){
-    const btn = document.getElementById("locateBtn");
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
-    try {
-        await MF.getUserLocation();
-        placeUser();
-        const c = await MF.reverseGeocode(MF.userPos.lat, MF.userPos.lng);
-        if(c) document.getElementById("city").value = c;
-        map.flyTo([MF.userPos.lat, MF.userPos.lng], 14);
-        MF.toast("Location detected", "success");
-        runSearch();
-    } catch { MF.toast("Couldn't access location", "warning"); }
-    finally { btn.innerHTML = '<i class="bi bi-crosshair"></i>'; }
-}
-
+function jsArg(v){ return String(v ?? "").replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\n/g," "); }
 function activeCat(){
     const a = document.querySelector("#catChips .chip.active");
     return a ? a.dataset.cat : "";
 }
+function placeUser(){
+    if(!MF.userPos) return;
+    if(userMarker) map.removeLayer(userMarker);
+    const label = MF.userPos.approximate ? "Selected area" : "You are here";
+    userMarker = L.marker([MF.userPos.lat, MF.userPos.lng], { icon: MF.makeIcon("user"), zIndexOffset: 1000 }).addTo(map)
+        .bindPopup(`<strong>${label}</strong>`);
+    document.getElementById("mapHint").textContent = MF.userPos.approximate
+        ? "Nearest-first sorting uses the selected area centre."
+        : "Nearest-first sorting uses your selected location.";
+}
+async function locateUser(){
+    const buttons = [document.getElementById("locateBtn"), document.getElementById("mapLocateBtn")].filter(Boolean);
+    buttons.forEach(btn => { btn.disabled = true; btn.dataset.oldHtml = btn.innerHTML; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Checking'; });
+    try {
+        const pos = await MF.detectLocation({ city: document.getElementById("city").value.trim() });
+        placeUser();
+        const c = pos.approximate ? (pos.city || document.getElementById("city").value) : await MF.reverseGeocode(MF.userPos.lat, MF.userPos.lng);
+        if(c) document.getElementById("city").value = c;
+        MF.location?.save?.({ city: c || document.getElementById("city").value, lat: MF.userPos.lat, lng: MF.userPos.lng, approximate: !!pos.approximate });
+        map.flyTo([MF.userPos.lat, MF.userPos.lng], 14);
+        MF.toast(pos.approximate ? "Using an approximate area because precise location is blocked." : "Location set. Results will be sorted by distance.", pos.approximate ? "info" : "success");
+        runSearch();
+    } catch { MF.toast("Could not access precise location. Type your city or area instead.", "warning"); }
+    finally { buttons.forEach(btn => { btn.disabled = false; btn.innerHTML = btn.dataset.oldHtml; }); }
+}
+
+function wireAutocomplete(){
+    const q = document.getElementById("q"), box = document.getElementById("suggestBox");
+    let items=[];
+    q.addEventListener("input", async()=>{
+        if(q.value.trim().length<2){box.classList.remove("open");return;}
+        try { items = await (await fetch(`/api/autocomplete?q=${encodeURIComponent(q.value.trim())}`)).json(); }
+        catch { items = []; }
+        if(!items.length){box.classList.remove("open");return;}
+        box.innerHTML = items.map((it,i)=>`<div class="suggest-item" data-i="${i}"><span><strong>${esc(it.med_name)}</strong> <small>${esc(it.salt_composition||"")}</small></span><i class="bi bi-arrow-return-left text-muted"></i></div>`).join("");
+        box.classList.add("open");
+        box.querySelectorAll(".suggest-item").forEach(el=>el.addEventListener("mousedown",()=>{q.value=items[+el.dataset.i].med_name;box.classList.remove("open");runSearch();}));
+    });
+    q.addEventListener("blur",()=>setTimeout(()=>box.classList.remove("open"),150));
+}
+
+async function syncCityLocation(city){
+    if (!city || city.length < 2) return;
+    const saved = MF.location?.load?.();
+    const sameCity = (saved?.city || "").trim().toLowerCase() === city.trim().toLowerCase();
+    if (MF.userPos && sameCity) return;
+    try {
+        const place = (await MF.geocode(city))[0];
+        if (!hasCoord(place?.lat) || !hasCoord(place?.lng)) return;
+        MF.userPos = { lat: +place.lat, lng: +place.lng, approximate: true, source: place.source || "public-geocode" };
+        MF.location?.save?.({ city, resolved_city: place.city || city, lat: MF.userPos.lat, lng: MF.userPos.lng, approximate: true });
+        placeUser();
+        map.flyTo([MF.userPos.lat, MF.userPos.lng], 13);
+        document.getElementById("mapHint").textContent = place.approximate
+            ? `Using approximate coordinates for ${place.city || city}.`
+            : `Using OpenStreetMap coordinates for ${place.city || city}.`;
+    } catch {}
+}
 
 async function runSearch(){
-    const q = document.getElementById("q").value.trim();
+    const formQ = document.getElementById("q").value.trim();
+    const qty = Math.max(1, Math.min(99, parseInt(document.getElementById("quantity").value || "1", 10) || 1));
+    document.getElementById("quantity").value = qty;
+    const city = document.getElementById("city").value.trim();
+    await syncCityLocation(city);
+    MF.location?.save?.({ city, lat: MF.userPos?.lat, lng: MF.userPos?.lng, approximate: !!MF.userPos?.approximate });
     const params = new URLSearchParams({
-        q, city: document.getElementById("city").value.trim(),
+        q: formQ,
+        city,
+        dosage: document.getElementById("dosage").value.trim(),
+        quantity: String(qty),
         sort: document.getElementById("sort").value,
         in_stock: document.getElementById("inStock").checked ? "1":"0",
         rx: document.getElementById("rx").value,
@@ -159,83 +229,91 @@ async function runSearch(){
     if (MF.userPos) { params.set("lat", MF.userPos.lat); params.set("lng", MF.userPos.lng); }
 
     const list = document.getElementById("resultsList");
-    list.innerHTML = Array(3).fill(0).map(()=>`
+    list.innerHTML = Array(4).fill(0).map(()=>`
         <div class="med-card" style="cursor:default">
             <div class="skeleton sk-title"></div>
-            <div class="skeleton sk-line" style="width:50%"></div>
-            <div class="skeleton sk-line" style="width:80%"></div>
+            <div class="skeleton sk-line" style="width:48%"></div>
+            <div class="skeleton sk-line" style="width:88%"></div>
+            <div class="skeleton sk-line" style="width:62%"></div>
         </div>`).join("");
-    document.getElementById("resultTitle").textContent = q ? `Results for "${q}"` : "All inventory";
-    document.getElementById("resultCount").textContent = "...";
+    document.getElementById("resultTitle").textContent = formQ ? `Results for “${formQ}”` : "Live local inventory";
+    document.getElementById("resultSub").textContent = city ? `Checking verified pharmacies around ${city}.` : "Use your location for nearest-first results.";
+    document.getElementById("resultCount").textContent = "Checking";
 
     try {
-        const r = await fetch(`/api/search?${params}`);
-        const data = await r.json();
+        const response = await fetch(`/api/search?${params}`);
+        const data = await response.json();
         lastResults = data.results || [];
-        render(lastResults);
+        render(lastResults, qty);
+        history.replaceState(null, "", `${location.pathname}?${params.toString()}`);
     } catch(e){
-        list.innerHTML = `<div class="empty"><i class="bi bi-wifi-off"></i> Couldn't reach the search service.</div>`;
+        list.innerHTML = `<div class="empty"><i class="bi bi-wifi-off"></i> Could not reach the search service.</div>`;
     }
 }
 
-function render(results){
+function render(results, requestedQty){
     const list = document.getElementById("resultsList");
     document.getElementById("resultCount").textContent = `${results.length} found`;
-    markers.layer.clearLayers();
-    activeCard = null;
+    markerLayer.clearLayers();
+    markerMap = [];
 
     if(!results.length){
         list.innerHTML = `<div class="empty"><i class="bi bi-emoji-frown"></i>
-            <strong>No matches.</strong><br><span class="small">Try the generic salt name, a different area, or uncheck "In stock only".</span></div>`;
+            <strong>No exact matches.</strong><br><span class="small">Try a salt name, remove the strength filter, search a nearby area, or upload the prescription for pharmacist review.</span>
+            <div class="mt-3"><a class="btn btn-primary btn-sm" href="{{ url_for('prescription_upload') }}"><i class="bi bi-file-earmark-medical"></i> Upload prescription</a></div>
+        </div>`;
         return;
     }
 
     list.innerHTML = "";
     const bounds = [];
     results.forEach((it, i)=>{
-        const card = document.createElement("div");
+        const canHold = Number(it.stock_quantity || 0) >= requestedQty;
+        const card = document.createElement("article");
         card.className = "med-card";
-        const stockTag = it.stock_quantity > 0
-            ? `<span class="tag tag-stock"><i class="bi bi-check2-circle"></i> ${it.stock_quantity} in stock</span>`
-            : `<span class="tag tag-out"><i class="bi bi-x-circle"></i> Out of stock</span>`;
+        const stockTag = canHold
+            ? `<span class="tag tag-stock"><i class="bi bi-check2-circle"></i> ${it.stock_quantity} available</span>`
+            : `<span class="tag tag-out"><i class="bi bi-exclamation-circle"></i> Only ${it.stock_quantity || 0} left</span>`;
         const rxTag = it.prescription
-            ? `<span class="tag tag-rx"><i class="bi bi-file-earmark-medical"></i> Rx</span>`
+            ? `<span class="tag tag-rx"><i class="bi bi-file-earmark-medical"></i> Prescription required</span>`
             : `<span class="tag tag-otc"><i class="bi bi-bag-check"></i> OTC</span>`;
-        const disc = it.discount_pct ? `<span class="tag tag-discount"><i class="bi bi-tags"></i> ${it.discount_pct}% off MRP</span>` : "";
-        const dist = it.distance_km != null ? MF.fmtDistance(it.distance_km) : (it.city||"");
+        const disc = it.discount_pct ? `<span class="tag tag-discount"><i class="bi bi-tags"></i> ${it.discount_pct}% below MRP</span>` : "";
+        const dist = it.distance_km != null ? MF.fmtDistance(it.distance_km) : esc(it.city||"");
         const open = it.open_now
             ? `<span class="open-dot"></span> Open now`
             : `<span class="open-dot closed"></span> Closed`;
+        const mrp = it.mrp && it.mrp > it.price ? `<span class="mrp">MRP ${MF.fmtMoney(it.mrp)}</span>` : "";
+        const unitText = requestedQty > 1 ? `${requestedQty} units requested` : "1 unit requested";
 
         card.innerHTML = `
             <div class="med-top">
                 <div>
-                    <div class="med-name">${it.med_name}</div>
-                    <div class="med-salt">${it.salt_composition||""} ${it.dosage?`· ${it.dosage}`:""}</div>
+                    <h3 class="med-name">${esc(it.med_name)}</h3>
+                    <div class="med-salt">${esc(it.salt_composition||"")}${it.dosage?` · ${esc(it.dosage)}`:""}</div>
                 </div>
-                <div class="med-price">${MF.fmtMoney(it.price)}</div>
+                <div class="price-block"><div class="med-price">${MF.fmtMoney(it.price)}</div>${mrp}</div>
             </div>
             <div class="med-meta">${rxTag}${stockTag}${disc}
-                ${it.category_name?`<span class="tag"><i class="bi bi-tag"></i> ${it.category_name}</span>`:""}
+                ${it.category_name?`<span class="tag"><i class="bi bi-tag"></i> ${esc(it.category_name)}</span>`:""}
                 ${it.delivery?`<span class="tag"><i class="bi bi-truck"></i> Delivery</span>`:""}
             </div>
             <div class="med-shop">
                 <div>
-                    <a href="/pharmacy/${it.shop_id}" class="shop-name" onclick="event.stopPropagation()">
-                        <i class="bi bi-shop text-teal"></i> ${it.shop_name}
-                    </a>
-                    <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building"></i> ${it.manufacturer}</span>`:""}</div>
+                    <a href="/pharmacy/${it.shop_id}" class="shop-name" onclick="event.stopPropagation()"><i class="bi bi-shop text-teal"></i> ${esc(it.shop_name)}</a>
+                    <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building"></i> ${esc(it.manufacturer)}</span>`:""}</div>
+                    <div class="small text-muted mt-1">${unitText}. Pickup hold lasts for 2 hours after the request.</div>
                 </div>
-                <div class="flex gap-2" style="flex:none">
-                    <button class="btn btn-ghost btn-sm" title="Save" data-fav><i class="bi bi-bookmark"></i></button>
-                    <button class="btn btn-primary btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve><i class="bi bi-bag-check"></i> Hold</button>
+                <div class="result-actions">
+                    <button class="btn btn-ghost btn-sm" title="Save" aria-label="Save medicine" data-fav><i class="bi bi-bookmark"></i></button>
+                    <button class="btn btn-primary btn-sm" ${canHold?"":"disabled"} data-reserve><i class="bi bi-bag-check"></i> Hold</button>
                 </div>
             </div>`;
 
-        card.addEventListener("mouseenter", ()=>{ highlight(i); });
+        card.addEventListener("click", ()=> focusResult(i, true));
+        card.addEventListener("mouseenter", ()=> focusResult(i, false));
         card.querySelector("[data-reserve]")?.addEventListener("click", e=>{
             e.stopPropagation();
-            MF.openReserve(it.med_id, it.med_name, it.shop_name);
+            MF.openReserve(it.med_id, it.med_name, it.shop_name, requestedQty);
         });
         card.querySelector("[data-fav]")?.addEventListener("click", e=>{
             e.stopPropagation();
@@ -243,43 +321,41 @@ function render(results){
         });
         list.appendChild(card);
 
-        if (it.lat && it.lng){
-            const m = L.marker([it.lat, it.lng], { icon: MF.makeIcon() }).addTo(markers.layer);
-            m.bindPopup(popupHtml(it));
-            m.on("click", ()=>{ setActive(i); card.scrollIntoView({behavior:"smooth", block:"nearest"}); });
+        if (hasCoord(it.lat) && hasCoord(it.lng)){
+            const m = L.marker([it.lat, it.lng], { icon: MF.makeIcon(i === 0 ? "amber" : "teal") }).addTo(markerLayer);
+            m.bindPopup(popupHtml(it, requestedQty, canHold));
+            m.on("click", ()=>{ focusResult(i, false); card.scrollIntoView({behavior:"smooth", block:"nearest"}); });
             bounds.push([it.lat, it.lng]);
-            markers[i] = m;
+            markerMap[i] = m;
         }
     });
 
+    MF.motion?.revealList?.(list.children, { startDelay: 0.03, stagger: 0.035 });
     if (MF.userPos) bounds.push([MF.userPos.lat, MF.userPos.lng]);
     if (bounds.length) map.fitBounds(bounds, { padding:[40,40], maxZoom:14 });
 }
 
-function popupHtml(it){
-    return `<h6>${it.shop_name}</h6>
-        <div class="mb-1"><strong>${it.med_name}</strong> ${it.dosage?`<small>· ${it.dosage}</small>`:""}</div>
-        <div class="text-muted small mb-1">${it.salt_composition||""}</div>
+function popupHtml(it, qty, canHold){
+    return `<h6>${esc(it.shop_name)}</h6>
+        <div class="mb-1"><strong>${esc(it.med_name)}</strong> ${it.dosage?`<small>· ${esc(it.dosage)}</small>`:""}</div>
+        <div class="text-muted small mb-1">${esc(it.salt_composition||"")}</div>
         <div class="flex between center mb-2">
-            <strong style="color:var(--teal-700);font-size:1.05rem">${MF.fmtMoney(it.price)}</strong>
-            <span class="tag ${it.stock_quantity>0?'tag-stock':'tag-out'}">${it.stock_quantity>0?it.stock_quantity+' in stock':'Out of stock'}</span>
+            <strong style="color:var(--primary-dark);font-size:1.05rem">${MF.fmtMoney(it.price)}</strong>
+            <span class="tag ${canHold?'tag-stock':'tag-out'}">${canHold?it.stock_quantity+' available':'Only '+(it.stock_quantity||0)+' left'}</span>
         </div>
-        <button class="btn btn-primary btn-sm btn-block" ${it.stock_quantity>0?"":"disabled"}
-            onclick="MF.openReserve(${it.med_id}, '${it.med_name.replace(/'/g,"\\'")}', '${it.shop_name.replace(/'/g,"\\'")}')">
-            <i class="bi bi-bag-check"></i> Hold for 2 hours
+        <button class="btn btn-primary btn-sm btn-block" ${canHold?"":"disabled"}
+            onclick="MF.openReserve(${it.med_id}, '${jsArg(it.med_name)}', '${jsArg(it.shop_name)}', ${qty})">
+            <i class="bi bi-bag-check"></i> Hold ${qty} for pickup
         </button>`;
 }
 
-function highlight(i){
-    const cards = document.querySelectorAll(".med-card");
-    cards.forEach(c=>c.classList.remove("active"));
-    if(cards[i]) cards[i].classList.add("active");
-    if(markers[i]) markers[i].openPopup();
-}
-function setActive(i){
-    const cards = document.querySelectorAll(".med-card");
-    cards.forEach(c=>c.classList.remove("active"));
-    if(cards[i]) cards[i].classList.add("active");
+function focusResult(i, openPopup){
+    document.querySelectorAll(".med-card").forEach((c, idx)=>c.classList.toggle("active", idx === i));
+    const m = markerMap[i];
+    if (m) {
+        if (openPopup) m.openPopup();
+        map.panTo(m.getLatLng(), { animate: true });
+    }
 }
 </script>
 {% endblock %}

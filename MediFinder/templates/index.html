@@ -1,179 +1,178 @@
 {% extends "base.html" %}
-{% set page_map = false %}
-{% block title %}MediFinder — Real-time medicine availability at verified pharmacies{% endblock %}
+{% set page_map = true %}
+{% block title %}MediFinder — Find medicine near you{% endblock %}
+{% block meta_desc %}Find genuine medicines at verified nearby pharmacies. Compare live stock, price, distance and hold medicine for pickup.{% endblock %}
 
 {% block content %}
-<!-- ===================== HERO ===================== -->
-<section class="hero">
+<section class="home-hero">
     <div class="container">
-        <div class="hero-grid">
-            <div class="fade-up">
+        <div class="home-hero-grid">
+            <div class="home-hero-copy" data-motion="home-copy">
+                <div class="location-pill" id="locationPill">
+                    <i class="bi bi-geo-alt"></i>
+                    Searching near <strong id="locationLabel">Patna</strong>
+                </div>
                 <span class="eyebrow"><i class="bi bi-shield-check"></i> Verified pharmacies only</span>
-                <h1 class="mt-3">Stop calling ten shops.<br><span class="accent">Find it nearby.</span></h1>
+                <h1 class="mt-3">Find medicine near you. <span class="accent">Hold it before you go.</span></h1>
                 <p class="hero-lead">
-                    Search by brand or active ingredient. MediFinder shows real-time stock,
-                    honest pricing and distance across licensed pharmacies — then holds it for you.
+                    Search by brand or salt composition, compare live stock and prices at licensed pharmacies,
+                    then reserve a 2-hour pickup hold. No more calling one shop after another.
                 </p>
 
-                <form class="searchbar" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search">
+                <form class="searchbar" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search" aria-label="Find medicine near you">
                     <div class="field">
                         <i class="bi bi-search"></i>
-                        <input type="text" name="q" id="heroQuery" placeholder="Search medicine or salt — e.g. Paracetamol, Azithromycin"
-                               autocomplete="off" aria-label="Search medicine">
+                        <input type="text" name="q" id="heroQuery" placeholder="Medicine or salt, for example Paracetamol or Azithromycin" autocomplete="off" aria-label="Medicine or salt">
                         <div class="suggest" id="suggestBox"></div>
                     </div>
                     <div class="field" style="border-left:1px solid var(--line)">
                         <i class="bi bi-geo-alt"></i>
-                        <input type="text" name="city" id="heroCity" placeholder="Your city or area" aria-label="City">
-                        <button type="button" class="loc-btn" id="locateBtn" title="Use my location">
-                            <i class="bi bi-crosshair"></i> Locate
-                        </button>
+                        <input type="text" name="city" id="heroCity" placeholder="City or area" aria-label="City or area">
+                        <input type="hidden" name="lat" id="heroLat">
+                        <input type="hidden" name="lng" id="heroLng">
+                        <button type="button" class="loc-btn" id="locateBtn"><i class="bi bi-crosshair"></i> Use location</button>
                     </div>
-                    <button class="btn btn-primary btn-search" type="submit">
-                        <i class="bi bi-compass"></i> Search
-                    </button>
+                    <button class="btn btn-primary btn-search" type="submit"><i class="bi bi-search"></i> Find stock</button>
                 </form>
 
-                <div class="chips mt-3" id="trendingChips">
-                    <span class="text-muted small" style="align-self:center;margin-right:.25rem"><i class="bi bi-fire text-amber"></i> Trending:</span>
-                    {% for t in trending %}
+                <div class="chips mt-3" id="trendingChips" aria-label="Popular searches">
+                    <span class="text-muted small" style="align-self:center"><i class="bi bi-fire text-amber"></i> Popular:</span>
+                    {% for t in trending[:7] %}
                     <button type="button" class="chip" data-q="{{ t.med_name }}">{{ t.med_name }}</button>
                     {% endfor %}
                 </div>
 
-                <div class="hero-meta">
-                    <div><i class="bi bi-clock-history"></i> 2-hour holds</div>
-                    <div><i class="bi bi-cash-stack"></i> Price comparison</div>
-                    <div><i class="bi bi-geo"></i> Distance sorting</div>
-                    <div><i class="bi bi-shield-exclamation"></i> Rx/OTC labels</div>
+                <div class="intent-grid" data-motion="intent-grid">
+                    <a class="intent-card" href="{{ url_for('search_page') }}">
+                        <span class="ico"><i class="bi bi-capsule-pill"></i></span>
+                        <span><strong>Search medicine</strong><small>Compare price, distance and stock.</small></span>
+                    </a>
+                    <a class="intent-card" href="{{ url_for('prescription_upload') }}">
+                        <span class="ico"><i class="bi bi-file-earmark-medical"></i></span>
+                        <span><strong>Upload prescription</strong><small>Let a verified pharmacy review it.</small></span>
+                    </a>
+                    <a class="intent-card" href="{{ url_for('pharmacy_map') }}">
+                        <span class="ico"><i class="bi bi-map"></i></span>
+                        <span><strong>Nearby pharmacies</strong><small>Open the verified pharmacy map.</small></span>
+                    </a>
+                    <a class="intent-card" href="{{ url_for('account') if current_customer else url_for('customer_login') }}">
+                        <span class="ico"><i class="bi bi-arrow-repeat"></i></span>
+                        <span><strong>Refill faster</strong><small>Use saved medicines and history.</small></span>
+                    </a>
                 </div>
             </div>
 
-            <div class="hero-visual fade-up">
-                <img src="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&w=1200&q=70"
-                     alt="Pharmacist organising medicines" loading="eager"
-                     onerror="this.style.display='none';this.parentElement.style.background='linear-gradient(135deg,#104a44,#0a3430)'">
-                <div class="hero-badge">
-                    <span class="dot"></span>
+            <div class="card home-map-card" data-motion="home-map-card">
+                <div class="home-map-header">
                     <div>
-                        <strong id="liveCount">{{ shops|length }} pharmacies live</strong>
-                        <small>Verified &amp; currently listing inventory</small>
+                        <h2 class="mb-0" style="font-size:1.2rem">Verified pharmacies nearby</h2>
+                        <p class="text-muted small mb-0" id="nearbyHint">Use your location to sort by distance.</p>
                     </div>
+                    <span class="badge badge-teal" id="nearbyCount">{{ shops|length }}</span>
+                </div>
+                <div class="map-wrap home-map-wrap">
+                    <div id="home-map"></div>
+                </div>
+                <div class="nearby-list mt-3" id="nearbyList">
+                    {% for s in shops[:5] %}
+                    <a class="nearby-item" href="{{ url_for('shop_profile', shop_id=s.id) }}">
+                        <span class="nearby-icon"><i class="bi bi-shop"></i></span>
+                        <span>
+                            <strong>{{ s.name }}</strong>
+                            <small>{{ s.address or s.city }}{% if s.city %}, {{ s.city }}{% endif %}</small>
+                        </span>
+                        <i class="bi bi-arrow-right-short"></i>
+                    </a>
+                    {% else %}
+                    <div class="empty"><i class="bi bi-map"></i> No verified pharmacies yet.</div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ===================== STATS ===================== -->
-<section class="section-tight" style="padding-top:2rem">
+<section class="section-tight">
     <div class="container">
-        <div class="stat-row">
+        <div class="stat-row" data-motion="stats">
             <div class="stat"><div class="num">{{ shops|length }}+</div><div class="lbl">Verified pharmacies</div></div>
             <div class="stat"><div class="num">{{ categories|length }}</div><div class="lbl">Medicine categories</div></div>
-            <div class="stat"><div class="num">2 hrs</div><div class="lbl">Reservation hold window</div></div>
-            <div class="stat"><div class="num">100%</div><div class="lbl">Licensed &amp; reviewed</div></div>
+            <div class="stat"><div class="num">2 hours</div><div class="lbl">Pickup hold window</div></div>
+            <div class="stat"><div class="num">Live</div><div class="lbl">Pharmacy stock updates</div></div>
         </div>
     </div>
 </section>
 
-<!-- ===================== FEATURES ===================== -->
-<section class="section" id="features">
+<section class="section surface-band" id="features">
     <div class="container">
-        <div class="text-center" style="max-width:640px;margin:0 auto 2.5rem">
+        <div class="section-heading" data-motion="heading">
             <span class="eyebrow eyebrow-amber">How it works</span>
-            <h2 class="mt-3">Built for the moment you need medicine now</h2>
-            <p class="text-muted">Three steps from symptom to shelf. No accounts required to search — sign in only to hold favourites and track reservations.</p>
+            <h2 class="mt-3">A simple flow for stressful moments</h2>
+            <p>The flow is built around one practical question: which trusted pharmacy nearby has this medicine now?</p>
         </div>
-
-        <div class="feature-grid stagger">
-            <div class="card card-hover feature">
-                <div class="ico"><i class="bi bi-search-heart"></i></div>
-                <h3>Search by name or salt</h3>
-                <p>Type a brand (Dolo 650) or the active ingredient (Paracetamol). We match across every verified pharmacy's live inventory.</p>
-            </div>
-            <div class="card card-hover feature">
-                <div class="ico"><i class="bi bi-map"></i></div>
-                <h3>See distance &amp; price</h3>
-                <p>Results are sorted nearest-first with live pricing, stock counts, discounts and open/closed status on a map.</p>
-            </div>
-            <div class="card card-hover feature">
-                <div class="ico"><i class="bi bi-bag-check"></i></div>
-                <h3>Hold in two taps</h3>
-                <p>Reserve with your phone. The pharmacy keeps it aside for two hours — no upfront payment, no out-of-stock surprises.</p>
-            </div>
+        <div class="process-grid">
+            <div class="card process-step card-hover"><span class="step-num">1</span><h3>Search</h3><p>Enter a brand name or active ingredient, then use your location for nearest-first results.</p></div>
+            <div class="card process-step card-hover"><span class="step-num">2</span><h3>Compare</h3><p>Check price, MRP, stock count, distance, delivery support and opening status.</p></div>
+            <div class="card process-step card-hover"><span class="step-num">3</span><h3>Hold</h3><p>Reserve the medicine with your phone number so the pharmacy can confirm the pickup request.</p></div>
+            <div class="card process-step card-hover"><span class="step-num">4</span><h3>Pick up</h3><p>Collect within the hold window and track every status change from your account.</p></div>
         </div>
     </div>
 </section>
 
-<!-- ===================== CATEGORIES ===================== -->
-<section class="section" style="background:var(--paper-2); border-block:1px solid var(--line)">
+<section class="section">
     <div class="container">
-        <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+        <div class="flex between center" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem" data-motion="category-heading">
             <div>
                 <span class="eyebrow">Browse</span>
-                <h2 class="mt-2 mb-0">Shop by category</h2>
+                <h2 class="mt-2 mb-0">Medicine categories</h2>
             </div>
             <a href="{{ url_for('search_page') }}" class="btn btn-outline"><i class="bi bi-grid"></i> View all inventory</a>
         </div>
-        <div class="chips" style="gap:.7rem">
-            {% for c in categories %}
-            <a class="chip" href="{{ url_for('search_page', cat=c.id) }}" style="padding:.7rem 1rem">
-                <i class="bi {{ c.icon }} text-teal"></i> {{ c.name }}
+        <div class="feature-grid" data-motion="category-grid">
+            {% for c in categories[:12] %}
+            <a class="intent-card" href="{{ url_for('search_page', cat=c.id) }}">
+                <span class="ico"><i class="bi {{ c.icon }}"></i></span>
+                <span><strong>{{ c.name }}</strong><small>Search verified local stock</small></span>
             </a>
             {% endfor %}
         </div>
     </div>
 </section>
 
-<!-- ===================== FOR PHARMACIES ===================== -->
-<section class="section" id="about">
+<section class="section surface-band" id="about">
     <div class="container">
-        <div class="card" style="padding:0; overflow:hidden; display:grid; grid-template-columns:1.1fr .9fr; border-radius:var(--radius-xl)">
-            <div style="padding:3rem; background:var(--teal-900); color:#eaf3f1">
-                <span class="eyebrow" style="background:rgba(255,255,255,.08); color:var(--amber-400); border-color:rgba(255,255,255,.15)">For pharmacists</span>
-                <h2 class="mt-3" style="color:#fff">Run a smarter counter.</h2>
-                <p style="color:rgba(255,255,255,.78); max-width:440px">
-                    List your inventory in minutes, manage stock from one dashboard, accept 2-hour
-                    holds from nearby customers and get found by patients searching for what you stock.
-                </p>
-                <ul class="auth-points" style="margin:1.5rem 0">
-                    <li><i class="bi bi-check-circle-fill"></i> Real-time inventory with expiry &amp; batch tracking</li>
-                    <li><i class="bi bi-check-circle-fill"></i> Reservation workflow: confirm → collect → complete</li>
-                    <li><i class="bi bi-check-circle-fill"></i> Store profile with hours, location, delivery and photos</li>
-                    <li><i class="bi bi-check-circle-fill"></i> Dashboard analytics: stock value, expiring items, demand</li>
+        <div class="pharmacy-split" data-motion="pharmacy-cta">
+            <div class="pharmacy-split__dark">
+                <span class="eyebrow" style="background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.18)">For pharmacies</span>
+                <h2 class="mt-3">Make your local stock easy to find.</h2>
+                <p>List inventory, accept pickup holds, update hours and location, and build trust through verification.</p>
+                <ul class="auth-points">
+                    <li><i class="bi bi-check-circle-fill"></i> Live inventory with price, batch and expiry details</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Pending → confirmed → collected reservation workflow</li>
+                    <li><i class="bi bi-check-circle-fill"></i> Low-stock and expiring-stock visibility in the dashboard</li>
                 </ul>
                 <div class="flex gap-2" style="flex-wrap:wrap">
-                    <a href="{{ url_for('shop_register') }}" class="btn btn-amber btn-lg"><i class="bi bi-shop"></i> Register your pharmacy</a>
-                    <a href="{{ url_for('shop_login') }}" class="btn btn-lg" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.3)">Pharmacy sign in</a>
+                    <a href="{{ url_for('shop_register') }}" class="btn btn-amber btn-lg"><i class="bi bi-shop"></i> Register pharmacy</a>
+                    <a href="{{ url_for('shop_login') }}" class="btn btn-outline btn-lg" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.32)">Sign in</a>
                 </div>
             </div>
-            <div style="padding:3rem; display:flex; flex-direction:column; justify-content:center; gap:1rem">
-                <div class="flex gap-3 center">
-                    <div class="ico" style="width:44px;height:44px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;font-size:1.2rem;flex:none"><i class="bi bi-patch-check"></i></div>
-                    <div><strong>Verified network</strong><div class="text-muted small">Every pharmacy submits a drug license, reviewed by our team.</div></div>
-                </div>
-                <div class="flex gap-3 center">
-                    <div class="ico" style="width:44px;height:44px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;font-size:1.2rem;flex:none"><i class="bi bi-cash-coin"></i></div>
-                    <div><strong>Transparent pricing</strong><div class="text-muted small">See MRP and selling price side by side. No hidden markups.</div></div>
-                </div>
-                <div class="flex gap-3 center">
-                    <div class="ico" style="width:44px;height:44px;border-radius:10px;background:var(--teal-50);color:var(--teal-700);display:grid;place-items:center;font-size:1.2rem;flex:none"><i class="bi bi-star"></i></div>
-                    <div><strong>Community reviews</strong><div class="text-muted small">Patients rate pharmacies so great service gets noticed.</div></div>
-                </div>
+            <div class="pharmacy-split__panel">
+                <div class="benefit-row"><span class="ico"><i class="bi bi-patch-check"></i></span><div><strong>Verified storefront</strong><div class="text-muted small">Drug licence review before public discovery.</div></div></div>
+                <div class="benefit-row"><span class="ico"><i class="bi bi-box-seam"></i></span><div><strong>Fast stock updates</strong><div class="text-muted small">Help customers avoid calling for unavailable items.</div></div></div>
+                <div class="benefit-row"><span class="ico"><i class="bi bi-bag-check"></i></span><div><strong>Pickup holds</strong><div class="text-muted small">Know who is coming and what quantity to keep aside for pickup.</div></div></div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ===================== CTA ===================== -->
 <section class="section-tight">
-    <div class="container text-center" style="max-width:680px">
-        <h2>Need something tonight?</h2>
-        <p class="text-muted">Search now — no account needed. Sign up to track reservations and save your regular medicines.</p>
+    <div class="container text-center" style="max-width:720px" data-motion="final-cta">
+        <h2>Need medicine today?</h2>
+        <p class="text-muted">Start with search, upload a prescription, or open the verified pharmacy map.</p>
         <div class="flex gap-2 center" style="justify-content:center;flex-wrap:wrap;margin-top:1rem">
-            <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-lg"><i class="bi bi-search"></i> Find medicine now</a>
-            <a href="{{ url_for('customer_register') }}" class="btn btn-outline btn-lg"><i class="bi bi-person-plus"></i> Create account</a>
+            <a href="{{ url_for('search_page') }}" class="btn btn-primary btn-lg"><i class="bi bi-search"></i> Find medicine</a>
+            <a href="{{ url_for('pharmacy_map') }}" class="btn btn-outline btn-lg"><i class="bi bi-map"></i> Open map</a>
+            <a href="{{ url_for('prescription_upload') }}" class="btn btn-outline btn-lg"><i class="bi bi-file-earmark-medical"></i> Upload prescription</a>
         </div>
     </div>
 </section>
@@ -181,21 +180,32 @@
 
 {% block scripts %}
 <script>
-// Hero search: autocomplete, locate, trending chips
 (function(){
     const form = document.getElementById("heroSearch");
     const q = document.getElementById("heroQuery");
     const city = document.getElementById("heroCity");
+    const lat = document.getElementById("heroLat");
+    const lng = document.getElementById("heroLng");
     const box = document.getElementById("suggestBox");
-    let idx = -1, items = [];
+    const label = document.getElementById("locationLabel");
+    function hasCoord(value){ return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)); }
+    let items = [];
+
+    const saved = MF.location?.load?.();
+    if (saved) {
+        if (saved.city) { city.value = saved.city; label.textContent = saved.city; }
+        if (hasCoord(saved.lat) && hasCoord(saved.lng)) { lat.value = saved.lat; lng.value = saved.lng; }
+    }
+
+    form.addEventListener("submit", () => {
+        MF.location?.save?.({ city: city.value.trim(), lat: lat.value || undefined, lng: lng.value || undefined });
+    });
 
     q.addEventListener("input", async () => {
         const term = q.value.trim();
         if (term.length < 2) { box.classList.remove("open"); return; }
-        try {
-            const r = await fetch(`/api/autocomplete?q=${encodeURIComponent(term)}`);
-            items = await r.json();
-        } catch { items = []; }
+        try { items = await (await fetch(`/api/autocomplete?q=${encodeURIComponent(term)}`)).json(); }
+        catch { items = []; }
         if (!items.length) { box.classList.remove("open"); return; }
         box.innerHTML = items.map((it,i)=>`
             <div class="suggest-item" data-i="${i}">
@@ -203,30 +213,102 @@
                 <i class="bi bi-arrow-return-left text-muted"></i>
             </div>`).join("");
         box.classList.add("open");
-        box.querySelectorAll(".suggest-item").forEach(el=>{
-            el.addEventListener("mousedown", ()=>{ q.value = items[+el.dataset.i].med_name; box.classList.remove("open"); form.requestSubmit();});
-        });
+        box.querySelectorAll(".suggest-item").forEach(el=>el.addEventListener("mousedown", ()=>{
+            q.value = items[+el.dataset.i].med_name; box.classList.remove("open"); form.requestSubmit();
+        }));
     });
     q.addEventListener("blur", ()=> setTimeout(()=>box.classList.remove("open"), 150));
 
-    document.getElementById("locateBtn").addEventListener("click", async (e)=>{
-        e.preventDefault();
-        const btn = e.currentTarget;
-        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Locating...';
-        try {
-            const pos = await MF.getUserLocation();
-            const c = await MF.reverseGeocode(pos.lat, pos.lng);
-            if (c) city.value = c;
-            MF.toast("Location detected — results sorted nearest first", "success");
-        } catch {
-            MF.toast("Couldn't access location. Type your city instead.", "warning");
-        } finally { btn.innerHTML = '<i class="bi bi-crosshair"></i> Locate'; }
+    document.getElementById("trendingChips")?.addEventListener("click", e=>{
+        const chip = e.target.closest(".chip");
+        if (chip) { q.value = chip.dataset.q; form.requestSubmit(); }
     });
 
-    document.getElementById("trendingChips").addEventListener("click", e=>{
-        const c = e.target.closest(".chip");
-        if (c) { q.value = c.dataset.q; form.requestSubmit(); }
+    document.getElementById("locateBtn").addEventListener("click", async (e)=>{
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Detecting';
+        try {
+            const pos = await MF.detectLocation({ city: city.value.trim() });
+            const cityName = pos.approximate ? (pos.city || city.value) : (await MF.reverseGeocode(pos.lat, pos.lng));
+            lat.value = pos.lat; lng.value = pos.lng;
+            if (cityName) { city.value = cityName; label.textContent = cityName; }
+            MF.location?.save?.({ lat: pos.lat, lng: pos.lng, city: cityName || city.value, approximate: !!pos.approximate });
+            if (window.renderHomeMap) window.renderHomeMap(true);
+            MF.toast(pos.approximate ? "Using an approximate area because precise location is blocked." : "Location set. Nearby pharmacies are sorted by distance.", pos.approximate ? "info" : "success");
+        } catch {
+            MF.toast("Could not access precise location. Type your area instead.", "warning");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-crosshair"></i> Use location';
+        }
     });
+})();
+
+(function(){
+    const mapEl = document.getElementById("home-map");
+    if (!mapEl || !window.L) return;
+    const shops = [
+        {% for s in shops %}
+        { id: {{ s.id|tojson }}, name: {{ s.name|tojson }}, city: {{ s.city|tojson }}, address: {{ s.address|tojson }}, lat: {{ s.lat|tojson }}, lng: {{ s.lng|tojson }}, delivery: {{ s.delivery|tojson }} }{{ ',' if not loop.last }}
+        {% endfor %}
+    ];
+    const map = L.map("home-map", { scrollWheelZoom: false }).setView([{{ DEFAULT_LAT }}, {{ DEFAULT_LNG }}], 12);
+    MF.addTileLayer(map);
+    const layer = L.layerGroup().addTo(map);
+    let userMarker = null;
+
+    function esc(v){ return String(v ?? "").replace(/[&<>'"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[ch])); }
+    function distance(a,b,c,d){
+        if([a,b,c,d].some(x=>x==null || Number.isNaN(+x))) return null;
+        const R=6371, toRad=x=>x*Math.PI/180;
+        const dLat=toRad(c-a), dLng=toRad(d-b);
+        const h=Math.sin(dLat/2)**2+Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLng/2)**2;
+        return Math.round(R*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h))*10)/10;
+    }
+    function popup(shop){
+        return `<h6>${esc(shop.name)}</h6><div class="text-muted small mb-2">${esc(shop.address || shop.city || "")}</div><a class="btn btn-primary btn-sm btn-block" href="/pharmacy/${shop.id}"><i class="bi bi-shop"></i> View pharmacy</a>`;
+    }
+    function updateList(items, located){
+        const list = document.getElementById("nearbyList");
+        document.getElementById("nearbyCount").textContent = items.length;
+        document.getElementById("nearbyHint").textContent = located ? "Sorted from your selected location." : "Use your location to sort by distance.";
+        list.innerHTML = items.slice(0, 6).map(shop => `
+            <a class="nearby-item" href="/pharmacy/${shop.id}">
+                <span class="nearby-icon"><i class="bi bi-shop"></i></span>
+                <span><strong>${esc(shop.name)}</strong><small>${esc(shop.address || shop.city || "")}${shop.distance_km != null ? ` · ${MF.fmtDistance(shop.distance_km)}` : ""}</small></span>
+                <i class="bi bi-arrow-right-short"></i>
+            </a>`).join("") || `<div class="empty"><i class="bi bi-map"></i> No verified pharmacies yet.</div>`;
+        MF.motion?.revealList?.(list.children, { stagger: .025 });
+    }
+    window.renderHomeMap = async function(located = false){
+        layer.clearLayers();
+        let items = shops.map(s => ({...s}));
+        if (MF.userPos && located) {
+            try {
+                const r = await fetch(`/api/shops/nearby?lat=${encodeURIComponent(MF.userPos.lat)}&lng=${encodeURIComponent(MF.userPos.lng)}`);
+                const j = await r.json();
+                if (j.ok && Array.isArray(j.shops)) items = j.shops;
+            } catch {}
+        }
+        if (MF.userPos) {
+            items.forEach(s => s.distance_km = distance(MF.userPos.lat, MF.userPos.lng, s.lat, s.lng));
+            items.sort((a,b)=>(a.distance_km ?? 9999)-(b.distance_km ?? 9999));
+            if (userMarker) map.removeLayer(userMarker);
+            const label = MF.userPos.approximate ? "Selected area" : "You are here";
+            userMarker = L.marker([MF.userPos.lat, MF.userPos.lng], { icon: MF.makeIcon("user"), zIndexOffset: 1000 }).addTo(map).bindPopup(`<strong>${label}</strong>`);
+        }
+        const bounds=[];
+        items.forEach((shop, i)=>{
+            if (!hasCoord(shop.lat) || !hasCoord(shop.lng)) return;
+            L.marker([shop.lat, shop.lng], { icon: MF.makeIcon(i===0 && MF.userPos ? "amber" : "teal") }).addTo(layer).bindPopup(popup(shop));
+            bounds.push([shop.lat, shop.lng]);
+        });
+        if (MF.userPos) bounds.push([MF.userPos.lat, MF.userPos.lng]);
+        if (bounds.length) map.fitBounds(bounds, { padding:[30,30], maxZoom:14 });
+        updateList(items, Boolean(MF.userPos));
+    };
+    renderHomeMap(Boolean(MF.userPos));
 })();
 </script>
 {% endblock %}
