@@ -1,186 +1,160 @@
 {% extends "base.html" %}
 {% set page_map = false %}
-{% block title %}MediFinder.ai — Operational Pharmacy Infrastructure{% endblock %}
+{% block title %}MediFinder — Operational Pharmacy Infrastructure{% endblock %}
 
 {% block content %}
-<!-- HERO — Vesper bottom-centered -->
-<section class="hero">
-<div class="hero-copy">
-<div class="badge appear appear--pop" style="--d:0.22s">
-<span class="badge-star" aria-hidden="true">
-<svg viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2.6C12.55 2.6 12.88 3.15 13.08 4.7c.62 4.7 1.52 5.6 6.22 6.22 1.55.2 2.1.53 2.1 1.08s-.55.88-2.1 1.08c-4.7.62-5.6 1.52-6.22 6.22-.2 1.55-.53 2.1-1.08 2.1s-.88-.55-1.08-2.1c-.62-4.7-1.52-5.6-6.22-6.22C3.15 12.88 2.6 12.55 2.6 12s.55-.88 2.1-1.08c4.7-.62 5.6-1.52 6.22-6.22C11.12 3.15 11.45 2.6 12 2.6Z"/></svg>
-</span>
-<span>Verified pharmacies only</span>
+<!-- LITHOS HERO — full-screen dark with spotlight reveal -->
+<section class="hero-lithos">
+<div class="base-layer hero-zoom" aria-hidden="true"></div>
+<div class="reveal-layer" aria-hidden="true"></div>
+<canvas class="reveal-canvas" aria-hidden="true"></canvas>
+
+<div class="hero-heading">
+<h1>
+<span class="line1 hero-anim hero-reveal font-playfair" style="animation-delay:0.25s;letter-spacing:-0.05em">Find medicines</span>
+<span class="line2 hero-anim hero-reveal" style="animation-delay:0.42s;letter-spacing:-0.08em">nearby, <em>instantly</em></span>
+</h1>
 </div>
 
-<h1>
-<span class="headline-line appear appear--mask" style="--d:0.42s"><span>Stop calling ten shops.</span></span>
-<span class="headline-line appear appear--mask" style="--d:0.62s"><span>Find it <em>nearby.</em></span></span>
-</h1>
+<div class="hero-bottom-left hero-anim hero-fade" style="animation-delay:0.7s">
+<p>Every pharmacy listing records a chapter of care — from ancient generics to modern salts, verified across neighbourhood stores near you.</p>
+</div>
 
-<p class="lede appear appear--soft" style="--d:0.82s;animation-duration:1.25s">Search by brand or active ingredient. MediFinder shows real-time stock, honest pricing and distance across licensed pharmacies — then holds it for you.</p>
+<div class="hero-bottom-right hero-anim hero-fade" style="animation-delay:0.85s">
+<p>Our interactive map lets you peel back distance to trace how stock, pricing, and trust combine to shape the pharmacy beneath your feet.</p>
 
-<form class="searchbar appear appear--btn" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search" aria-label="Medicine search" style="--d:0.96s">
+<form class="searchbar-lithos" id="heroSearch" action="{{ url_for('search_page') }}" method="get" role="search" aria-label="Medicine search" style="position:relative">
 <div class="field">
 <i class="bi bi-search" aria-hidden="true"></i>
-<input type="text" name="q" id="heroQuery" placeholder="Search medicine or salt — e.g. Paracetamol, Azithromycin" autocomplete="off" aria-label="Search medicine" aria-autocomplete="list" aria-controls="suggestBox">
-<div class="suggest" id="suggestBox" role="listbox" aria-label="Search suggestions"></div>
+<input type="text" name="q" id="heroQuery" placeholder="Paracetamol, Azithromycin..." autocomplete="off" aria-label="Search medicine" aria-autocomplete="list" aria-controls="suggestBox">
+<div class="suggest-lithos" id="suggestBox" role="listbox" aria-label="Search suggestions"></div>
 </div>
-<div class="field" style="border-left:1px solid var(--border-soft)">
+<div class="field" style="margin-top:8px">
 <i class="bi bi-geo-alt" aria-hidden="true"></i>
 <input type="text" name="city" id="heroCity" placeholder="Your city or area" aria-label="City">
 <button type="button" class="loc-btn" id="locateBtn" aria-label="Use my current location"><i class="bi bi-crosshair" aria-hidden="true"></i> Locate</button>
 </div>
-<button class="btn btn-solid btn-search" type="submit" aria-label="Search medicines"><i class="bi bi-compass" aria-hidden="true"></i> Search</button>
+<button class="cta-lithos" type="submit" style="margin-top:8px;width:100%;justify-content:center">Start Searching</button>
 </form>
 
-<div class="chips mt-3 appear appear--side" id="trendingChips" role="group" aria-label="Trending medicines" style="--d:1.10s;justify-content:center">
-<span class="small" style="align-self:center;margin-right:.25rem;color:var(--muted)"><i class="bi bi-fire" style="color:#fbbf24" aria-hidden="true"></i> Trending:</span>
-{% for t in trending %}
-<button type="button" class="chip" data-q="{{ t.med_name }}" aria-label="Search for {{ t.med_name }}">{{ t.med_name }}</button>
+<div class="chips mt-3" id="trendingChips" role="group" aria-label="Trending medicines" style="margin-top:12px;justify-content:flex-start">
+{% for t in trending[:5] %}
+<button type="button" class="chip" data-q="{{ t.med_name }}">{{ t.med_name }}</button>
 {% endfor %}
 </div>
 
-<div class="hero-meta appear appear--soft" aria-label="Features" style="--d:1.12s;justify-content:center;margin-top:26px">
-<div><i class="bi bi-clock-history" aria-hidden="true"></i> 2-hour holds</div>
-<div><i class="bi bi-cash-stack" aria-hidden="true"></i> Price comparison</div>
-<div><i class="bi bi-geo" aria-hidden="true"></i> Distance sorting</div>
-<div><i class="bi bi-shield-exclamation" aria-hidden="true"></i> Rx/OTC labels</div>
+<div class="hero-meta" style="margin-top:16px;justify-content:flex-start">
+<div><i class="bi bi-clock-history"></i> 2-hour holds</div>
+<div><i class="bi bi-geo"></i> Distance sorted</div>
 </div>
 </div>
 </section>
 
-<!-- STATS — Vesper stats footer style -->
-<section class="section-tight" style="padding-top:0">
+<!-- STATS — lithos style but medifinder data -->
+<section class="section-tight" style="padding-top:40px;background:#000">
 <div class="container">
-<div class="stats appear appear--stat" style="--d:1.28s;padding:0 0 36px;justify-content:center;gap:32px;flex-wrap:wrap">
-<div class="stat appear appear--stat" style="--d:1.12s">
-<span class="stat-icon" aria-hidden="true">
-<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="g1" x1="3" y1="2" x2="14" y2="22"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.38"/><stop offset="100%" stop-color="#3a3a3a" stop-opacity="0.62"/></linearGradient><linearGradient id="g2" x1="14" y1="2" x2="3" y2="22"><stop offset="0%" stop-color="#3a3a3a" stop-opacity="0.38"/><stop offset="100%" stop-color="#ffffff" stop-opacity="0.62"/></linearGradient></defs><rect x="3.4" y="2.6" width="7.2" height="18.8" rx="3.6" fill="url(#g1)"/><rect x="13.4" y="2.6" width="7.2" height="18.8" rx="3.6" fill="url(#g2)"/><rect x="9.2" y="10.9" width="5.6" height="2.2" rx="1.1" fill="#4a4a4a"/></svg>
-</span>
-<span>{{ shops|length }}+ verified pharmacies</span>
-</div>
-<div class="stat appear appear--stat" style="--d:1.28s">
-<span class="stat-icon" aria-hidden="true">
-<svg viewBox="0 0 24 24" fill="none"><rect x="2.4" y="2.4" width="19.2" height="19.2" rx="6.2" fill="#ffffff"/><g stroke="#111" stroke-width="1.85" stroke-linecap="round"><path d="M12 7.1v7.4"/><path d="M8.15 12.35L12 16.2l3.85-3.85"/></g></svg>
-</span>
-<span>{{ categories|length }} categories • 2hr holds</span>
-</div>
-<div class="stat appear appear--stat" style="--d:1.44s">
-<span class="stat-icon-wide" aria-hidden="true">
-<svg viewBox="0 0 40 22" fill="none"><circle cx="10.2" cy="11" r="9.2" fill="#2b2b2b"/><ellipse cx="10.2" cy="12.1" rx="4.15" ry="3.7" fill="#f4f4f4"/><circle cx="20.2" cy="11" r="9.2" fill="#ffffff"/><circle cx="30.2" cy="11" r="9.2" fill="#f26b1d"/><text x="30.2" y="15.1" font-family='"Inter",system-ui,sans-serif' font-weight="700" font-size="12.5" text-anchor="middle" fill="#fff">e</text></svg>
-</span>
-<span>100% licensed &amp; reviewed</span>
-</div>
+<div class="stat-row">
+<div class="stat"><div class="num">{{ shops|length }}+</div><div class="lbl">Verified pharmacies</div></div>
+<div class="stat"><div class="num">{{ categories|length }}</div><div class="lbl">Medicine categories</div></div>
+<div class="stat"><div class="num">2 hrs</div><div class="lbl">Reservation hold</div></div>
+<div class="stat"><div class="num">100%</div><div class="lbl">Licensed &amp; reviewed</div></div>
 </div>
 </div>
 </section>
 
-<!-- FEATURES -->
-<section class="section" id="features" aria-labelledby="features-heading">
+<!-- FEATURES — dark glass -->
+<section class="section" id="features" style="background:#000">
 <div class="container">
-<div class="text-center appear appear--soft" style="max-width:640px;margin:0 auto 2.5rem;--d:0.22s">
+<div class="text-center" style="max-width:640px;margin:0 auto 40px">
 <span class="eyebrow">How it works</span>
-<h2 class="mt-3" id="features-heading" style="font-size:32px;letter-spacing:-0.04em;color:#fff">Built for the moment you need medicine now</h2>
-<p style="color:var(--muted)">Three steps from symptom to shelf. No accounts required to search — sign in only to hold favourites and track reservations.</p>
+<h2 style="font-size:42px;letter-spacing:-0.05em;line-height:0.95;color:#fff;margin-top:12px"><span class="font-playfair" style="font-style:italic;font-weight:400">Built</span> for the moment you need medicine now</h2>
+<p style="color:rgba(255,255,255,0.56);margin-top:12px">Three steps from symptom to shelf. No accounts required to search — sign in only to hold favourites and track reservations.</p>
 </div>
 <div class="feature-grid">
-<div class="card card-hover feature appear appear--scale" style="--d:0.28s">
-<div class="ico" aria-hidden="true"><i class="bi bi-search-heart"></i></div>
-<h3>Search by name or salt</h3>
-<p>Type a brand (Dolo 650) or the active ingredient (Paracetamol). We match across every verified pharmacy's live inventory.</p>
-</div>
-<div class="card card-hover feature appear appear--soft" style="--d:0.40s">
-<div class="ico" aria-hidden="true"><i class="bi bi-map"></i></div>
-<h3>See distance &amp; price</h3>
-<p>Results are sorted nearest-first with live pricing, stock counts, discounts and open/closed status on a map.</p>
-</div>
-<div class="card card-hover feature appear appear--scale" style="--d:0.52s">
-<div class="ico" aria-hidden="true"><i class="bi bi-bag-check"></i></div>
-<h3>Hold in two taps</h3>
-<p>Reserve with your phone. The pharmacy keeps it aside for two hours — no upfront payment, no out-of-stock surprises.</p>
-</div>
+<div class="card card-hover feature"><div class="ico"><i class="bi bi-search-heart"></i></div><h3>Search by name or salt</h3><p>Type a brand (Dolo 650) or the active ingredient (Paracetamol). We match across every verified pharmacy's live inventory.</p></div>
+<div class="card card-hover feature"><div class="ico"><i class="bi bi-map"></i></div><h3>See distance &amp; price</h3><p>Results are sorted nearest-first with live pricing, stock counts, discounts and open/closed status on a map.</p></div>
+<div class="card card-hover feature"><div class="ico"><i class="bi bi-bag-check"></i></div><h3>Hold in two taps</h3><p>Reserve with your phone. The pharmacy keeps it aside for two hours — no upfront payment, no out-of-stock surprises.</p></div>
 </div>
 </div>
 </section>
 
-<!-- TESTIMONIALS — Vesper style -->
-<section class="section testimonials" id="testimonials" aria-labelledby="testimonials-heading">
+<!-- TESTIMONIALS -->
+<section class="section testimonials" id="testimonials">
 <div class="container">
-<div class="flex between center appear appear--soft" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;--d:0.16s">
+<div class="flex between center" style="flex-wrap:wrap;gap:16px;margin-bottom:24px">
 <div>
 <span class="eyebrow">Trusted by patients</span>
-<h2 class="mt-2 mb-0" id="testimonials-heading" style="font-size:28px;color:#fff">Real stories, verified pharmacies</h2>
+<h2 style="font-size:28px;color:#fff;margin-top:8px">Real stories, verified pharmacies</h2>
 </div>
 <div class="flex gap-2">
-<button class="btn btn-ghost btn-sm" id="testiPrev" aria-label="Previous testimonial"><i class="bi bi-chevron-left"></i></button>
-<button class="btn btn-ghost btn-sm" id="testiNext" aria-label="Next testimonial"><i class="bi bi-chevron-right"></i></button>
+<button class="btn btn-ghost btn-sm" id="testiPrev" aria-label="Previous"><i class="bi bi-chevron-left"></i></button>
+<button class="btn btn-ghost btn-sm" id="testiNext" aria-label="Next"><i class="bi bi-chevron-right"></i></button>
 </div>
 </div>
-<div class="testimonial-track" id="testiTrack" role="region" aria-label="Testimonials carousel" tabindex="0">
-<div class="testimonial-card appear appear--scale" style="--d:0.22s"><div class="quote">“Found Azithromycin at 11 PM within 800m. The hold saved me — pharmacy was ready when I arrived.”</div><div class="author"><div class="avatar">AR</div><div class="meta"><strong>Ananya R.</strong><small>Patna • Verified customer</small></div></div></div>
-<div class="testimonial-card appear appear--soft" style="--d:0.34s"><div class="quote">“Price comparison is honest. I saved ₹180 on my mother's monthly medicines.”</div><div class="author"><div class="avatar">VK</div><div class="meta"><strong>Vikram K.</strong><small>Kankarbagh • Customer</small></div></div></div>
-<div class="testimonial-card appear appear--scale" style="--d:0.46s"><div class="quote">“As a pharmacist, listings take 2 minutes. We get 12–15 holds daily — all serious buyers.”</div><div class="author"><div class="avatar">SP</div><div class="meta"><strong>Sharma Pharmacy</strong><small>Frazer Road • Verified</small></div></div></div>
-<div class="testimonial-card appear appear--soft" style="--d:0.58s"><div class="quote">“Distance sorting is a lifesaver during fever. No more calling ten shops.”</div><div class="author"><div class="avatar">MT</div><div class="meta"><strong>Meera T.</strong><small>Boring Road • Customer</small></div></div></div>
+<div class="testimonial-track" id="testiTrack" role="region" aria-label="Testimonials" tabindex="0">
+<div class="testimonial-card"><div class="quote">“Found Azithromycin at 11 PM within 800m. The hold saved me.”</div><div class="author"><div class="avatar">AR</div><div class="meta"><strong>Ananya R.</strong><small>Patna • Verified</small></div></div></div>
+<div class="testimonial-card"><div class="quote">“Price comparison is honest. I saved ₹180 on monthly medicines.”</div><div class="author"><div class="avatar">VK</div><div class="meta"><strong>Vikram K.</strong><small>Kankarbagh</small></div></div></div>
+<div class="testimonial-card"><div class="quote">“As a pharmacist, listings take 2 minutes. 12–15 holds daily.”</div><div class="author"><div class="avatar">SP</div><div class="meta"><strong>Sharma Pharmacy</strong><small>Frazer Road</small></div></div></div>
+<div class="testimonial-card"><div class="quote">“Distance sorting is a lifesaver during fever.”</div><div class="author"><div class="avatar">MT</div><div class="meta"><strong>Meera T.</strong><small>Boring Road</small></div></div></div>
 </div>
 </div>
 </section>
 
 <!-- CATEGORIES -->
-<section class="section" style="border-top:1px solid var(--border-soft)" aria-labelledby="categories-heading">
+<section class="section" style="border-top:1px solid rgba(255,255,255,0.06)">
 <div class="container">
-<div class="flex between center appear appear--soft" style="flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;--d:0.16s">
+<div class="flex between center" style="flex-wrap:wrap;gap:16px;margin-bottom:24px">
 <div>
 <span class="eyebrow">Browse</span>
-<h2 class="mt-2 mb-0" id="categories-heading" style="color:#fff">Shop by category</h2>
+<h2 style="color:#fff;margin-top:8px">Shop by category</h2>
 </div>
-<a href="{{ url_for('search_page') }}" class="btn btn-ghost"><i class="bi bi-grid" aria-hidden="true"></i> View all inventory</a>
+<a href="{{ url_for('search_page') }}" class="btn btn-ghost"><i class="bi bi-grid"></i> View all inventory</a>
 </div>
-<div class="chips appear appear--scale" style="gap:.7rem;--d:0.28s" role="group" aria-label="Medicine categories">
+<div class="chips" style="gap:10px">
 {% for c in categories %}
-<a class="chip" href="{{ url_for('search_page', cat=c.id) }}" aria-label="Browse {{ c.name }}"><i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }}</a>
+<a class="chip" href="{{ url_for('search_page', cat=c.id) }}"><i class="bi {{ c.icon }}"></i> {{ c.name }}</a>
 {% endfor %}
 </div>
 </div>
 </section>
 
 <!-- FOR PHARMACIES -->
-<section class="section" id="about" aria-labelledby="about-heading">
+<section class="section" id="about">
 <div class="container">
-<div class="card appear appear--soft" style="padding:0;overflow:hidden;display:grid;grid-template-columns:1.1fr .9fr;border-radius:22px;--d:0.22s">
-<div style="padding:clamp(1.5rem,4vw,3rem);background:linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 100%);color:#e8e8e8;border-right:1px solid var(--border-soft)">
-<span class="eyebrow" style="background:rgba(255,255,255,0.06);color:#fff;border-color:var(--border)">For pharmacists</span>
-<h2 class="mt-3" style="color:#fff" id="about-heading">Run a smarter counter.</h2>
-<p style="color:var(--muted);max-width:440px">List your inventory in minutes, manage stock from one dashboard, accept 2-hour holds from nearby customers and get found by patients searching for what you stock.</p>
-<ul class="auth-points" style="margin:1.5rem 0">
-<li><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Real-time inventory with expiry &amp; batch tracking</li>
-<li><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Reservation workflow: confirm → collect → complete</li>
-<li><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Store profile with hours, location, delivery and photos</li>
-<li><i class="bi bi-check-circle-fill" aria-hidden="true"></i> Dashboard analytics: stock value, expiring items, demand</li>
+<div class="card" style="padding:0;overflow:hidden;display:grid;grid-template-columns:1.1fr .9fr;border-radius:22px">
+<div style="padding:clamp(24px,4vw,48px);background:#0a0a0a;color:#e8e8e8;border-right:1px solid rgba(255,255,255,0.06)">
+<span class="eyebrow" style="background:rgba(255,255,255,0.06);color:#fff;border-color:rgba(255,255,255,0.12)">For pharmacists</span>
+<h2 style="color:#fff;margin-top:12px;font-size:36px;letter-spacing:-0.04em;line-height:0.95">Run a <em class="font-playfair" style="font-style:italic;font-weight:400;color:#e8702a">smarter</em> counter.</h2>
+<p style="color:rgba(255,255,255,0.56);max-width:440px;margin-top:12px">List your inventory in minutes, manage stock from one dashboard, accept 2-hour holds from nearby customers.</p>
+<ul class="auth-points" style="margin:24px 0">
+<li><i class="bi bi-check-circle-fill"></i> Real-time inventory with expiry &amp; batch tracking</li>
+<li><i class="bi bi-check-circle-fill"></i> Reservation workflow: confirm → collect → complete</li>
+<li><i class="bi bi-check-circle-fill"></i> Store profile with hours, location, delivery and photos</li>
+<li><i class="bi bi-check-circle-fill"></i> Dashboard analytics: stock value, expiring items, demand</li>
 </ul>
 <div class="flex gap-2" style="flex-wrap:wrap">
-<a href="{{ url_for('shop_register') }}" class="btn btn-solid btn-lg"><i class="bi bi-shop" aria-hidden="true"></i> Register your pharmacy</a>
+<a href="{{ url_for('shop_register') }}" class="btn btn-solid btn-lg" style="background:#e8702a;border-color:#e8702a;color:#fff">Register your pharmacy</a>
 <a href="{{ url_for('shop_login') }}" class="btn btn-ghost btn-lg">Pharmacy sign in</a>
 </div>
 </div>
-<div style="padding:clamp(1.5rem,4vw,3rem);display:flex;flex-direction:column;justify-content:center;gap:1rem;background:rgba(255,255,255,0.02)">
-<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:1.2rem;flex:none;border:1px solid var(--border)"><i class="bi bi-patch-check"></i></div><div><strong style="color:#fff">Verified network</strong><div class="small" style="color:var(--muted)">Every pharmacy submits a drug license, reviewed by our team.</div></div></div>
-<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:1.2rem;flex:none;border:1px solid var(--border)"><i class="bi bi-cash-coin"></i></div><div><strong style="color:#fff">Transparent pricing</strong><div class="small" style="color:var(--muted)">See MRP and selling price side by side. No hidden markups.</div></div></div>
-<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:1.2rem;flex:none;border:1px solid var(--border)"><i class="bi bi-star"></i></div><div><strong style="color:#fff">Community reviews</strong><div class="small" style="color:var(--muted)">Patients rate pharmacies so great service gets noticed.</div></div></div>
+<div style="padding:clamp(24px,4vw,48px);display:flex;flex-direction:column;justify-content:center;gap:16px;background:rgba(255,255,255,0.02)">
+<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:20px;flex:none;border:1px solid rgba(255,255,255,0.08)"><i class="bi bi-patch-check"></i></div><div><strong style="color:#fff">Verified network</strong><div class="small" style="color:rgba(255,255,255,0.48)">Every pharmacy submits a drug license, reviewed by our team.</div></div></div>
+<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:20px;flex:none;border:1px solid rgba(255,255,255,0.08)"><i class="bi bi-cash-coin"></i></div><div><strong style="color:#fff">Transparent pricing</strong><div class="small" style="color:rgba(255,255,255,0.48)">See MRP and selling price side by side.</div></div></div>
+<div class="flex gap-3 center"><div class="ico" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;display:grid;place-items:center;font-size:20px;flex:none;border:1px solid rgba(255,255,255,0.08)"><i class="bi bi-star"></i></div><div><strong style="color:#fff">Community reviews</strong><div class="small" style="color:rgba(255,255,255,0.48)">Patients rate pharmacies so great service gets noticed.</div></div></div>
 </div>
 </div>
 </div>
 </section>
 
 <!-- CTA -->
-<section class="section-tight" aria-labelledby="cta-heading">
-<div class="container text-center appear appear--soft" style="max-width:680px;--d:0.22s">
+<section class="section-tight">
+<div class="container text-center" style="max-width:680px">
 <span class="eyebrow" style="background:linear-gradient(90deg,#7d7d7d 0%,#2a2a2a 52%,#0a0a0a 100%);color:#f2f2f2;border:0">Get started now</span>
-<h2 class="mt-3" id="cta-heading" style="color:#fff">Need something tonight?</h2>
-<p style="color:var(--muted)">Search now — no account needed. Sign up to track reservations and save your regular medicines.</p>
-<div class="flex gap-2 center" style="justify-content:center;flex-wrap:wrap;margin-top:1.25rem">
-<a href="{{ url_for('search_page') }}" class="btn btn-solid btn-lg appear appear--btn" style="--d:0.34s"><i class="bi bi-search" aria-hidden="true"></i> Find medicine now</a>
-<a href="{{ url_for('customer_register') }}" class="btn btn-ghost btn-lg appear appear--side" style="--d:0.46s"><i class="bi bi-person-plus" aria-hidden="true"></i> Create account</a>
+<h2 style="color:#fff;margin-top:12px;font-size:36px;letter-spacing:-0.04em">Need something tonight?</h2>
+<p style="color:rgba(255,255,255,0.56)">Search now — no account needed. Sign up to track reservations and save your regular medicines.</p>
+<div class="flex gap-2 center" style="justify-content:center;flex-wrap:wrap;margin-top:20px">
+<a href="{{ url_for('search_page') }}" class="btn btn-solid btn-lg" style="background:#fff;color:#000">Find medicine now</a>
+<a href="{{ url_for('customer_register') }}" class="btn btn-ghost btn-lg">Create account</a>
 </div>
 </div>
 </section>
@@ -199,7 +173,7 @@ const term=q.value.trim();
 if(term.length<2){box.classList.remove("open");return}
 try{const r=await fetch(`/api/autocomplete?q=${encodeURIComponent(term)}`);items=await r.json()}catch{items=[]}
 if(!items.length){box.classList.remove("open");return}
-box.innerHTML=items.map((it,i)=>`<div class="suggest-item" data-i="${i}" role="option"><span><strong>${it.med_name}</strong> <small>${it.salt_composition||""}</small></span><i class="bi bi-arrow-return-left" style="color:var(--muted)"></i></div>`).join("");
+box.innerHTML=items.map((it,i)=>`<div class="suggest-item" data-i="${i}" role="option"><span><strong>${it.med_name}</strong> <small>${it.salt_composition||""}</small></span></div>`).join("");
 box.classList.add("open");
 box.querySelectorAll(".suggest-item").forEach(el=>{el.addEventListener("mousedown",()=>{q.value=items[+el.dataset.i].med_name;box.classList.remove("open");form.requestSubmit()})});
 });
@@ -223,7 +197,6 @@ const pause=()=>clearInterval(auto);
 const resume=()=>{clearInterval(auto);auto=setInterval(()=>track.scrollBy({left:amt,behavior:"smooth"}),5000)};
 track.addEventListener("mouseenter",pause);track.addEventListener("mouseleave",resume);
 track.addEventListener("focusin",pause);track.addEventListener("focusout",resume);
-track.addEventListener("keydown",e=>{if(e.key==="ArrowRight"){e.preventDefault();track.scrollBy({left:amt,behavior:"smooth"})}if(e.key==="ArrowLeft"){e.preventDefault();track.scrollBy({left:-amt,behavior:"smooth"})}});
 }
 })();
 </script>

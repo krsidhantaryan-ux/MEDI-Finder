@@ -1,28 +1,30 @@
 {% extends "base.html" %}
 {% set page_map = true %}
-{% block title %}Search — MediFinder.ai{% endblock %}
+{% block title %}Search — MediFinder{% endblock %}
 
 {% block content %}
-<section class="section-tight" style="padding-top:1.25rem">
+<section class="section-tight" style="padding-top:92px;background:#000">
 <div class="container">
-<form id="searchForm" class="searchbar mb-3 appear appear--soft" style="grid-template-columns:1fr 200px 170px auto;max-width:100%;--d:0.16s" role="search" aria-label="Medicine search">
+<form id="searchForm" class="searchbar-lithos mb-3 appear appear--soft" style="--d:0.16s" role="search" aria-label="Medicine search">
 <div class="field">
 <i class="bi bi-search" aria-hidden="true"></i>
 <input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off" aria-label="Medicine or salt" aria-autocomplete="list" aria-controls="suggestBox">
-<div class="suggest" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
+<div class="suggest-lithos" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
 </div>
-<div class="field" style="border-left:1px solid var(--border-soft)">
+<div class="field" style="margin-top:8px">
 <i class="bi bi-geo-alt" aria-hidden="true"></i>
 <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area" aria-label="City or area">
 <button type="button" class="loc-btn" id="locateBtn" aria-label="Use my location"><i class="bi bi-crosshair" aria-hidden="true"></i></button>
 </div>
-<select id="sort" name="sort" class="form-select" style="border:0;background:transparent;font-size:0.9rem;color:#fff" aria-label="Sort results">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+<select id="sort" name="sort" class="form-select" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#fff;border-radius:10px;padding:.6rem .8rem;font-size:.9rem" aria-label="Sort results">
 <option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
 <option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low to high</option>
 <option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high to low</option>
 <option value="stock" {{ 'selected' if sort=='stock' }}>Most in stock</option>
 </select>
-<button class="btn btn-solid btn-search" type="submit" aria-label="Search"><i class="bi bi-arrow-right" aria-hidden="true"></i> Search</button>
+<button class="cta-lithos" type="submit" aria-label="Search" style="justify-content:center">Search</button>
+</div>
 </form>
 
 <div class="flex gap-2 center appear appear--soft" style="flex-wrap:wrap;justify-content:space-between;margin-bottom:1rem;--d:0.28s">
@@ -33,8 +35,8 @@
 {% endfor %}
 </div>
 <div class="flex gap-2 center" style="font-size:.85rem">
-<label class="form-check" style="margin:0;color:var(--muted)"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
-<select id="rx" class="form-select" style="width:auto;padding:.4rem .6rem;font-size:.85rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);color:#fff" aria-label="Prescription filter">
+<label class="form-check" style="margin:0;color:rgba(255,255,255,0.56)"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
+<select id="rx" class="form-select" style="width:auto;padding:.45rem .7rem;font-size:.85rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:#fff;border-radius:10px" aria-label="Prescription filter">
 <option value="">Rx &amp; OTC</option>
 <option value="0" {{ 'selected' if rx=='0' }}>OTC only</option>
 <option value="1" {{ 'selected' if rx=='1' }}>Prescription</option>
@@ -46,7 +48,7 @@
 <div>
 <div class="flex between center mb-2 appear appear--soft" style="--d:0.34s">
 <h2 class="mb-0" style="font-size:1.2rem;color:#fff" id="resultTitle">Searching...</h2>
-<span class="badge" id="resultCount" aria-live="polite" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)">—</span>
+<span class="badge" id="resultCount" aria-live="polite" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12)">—</span>
 </div>
 <div class="results-list" id="resultsList" role="list" aria-label="Medicine results" aria-busy="false">
 <div class="empty"><i class="bi bi-search" aria-hidden="true"></i> Enter a medicine name above to see live availability.</div>
