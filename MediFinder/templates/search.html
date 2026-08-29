@@ -1,68 +1,62 @@
 {% extends "base.html" %}
 {% set page_map = true %}
-{% block title %}Search results — MediFinder{% endblock %}
+{% block title %}Search — MediFinder.ai{% endblock %}
 
 {% block content %}
 <section class="section-tight" style="padding-top:1.25rem">
 <div class="container">
-    <!-- Search bar — motion focus -->
-    <form id="searchForm" class="searchbar mb-3" style="grid-template-columns:1fr 200px 170px auto" role="search" aria-label="Medicine search">
-        <div class="field">
-            <i class="bi bi-search" aria-hidden="true"></i>
-            <input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off" aria-label="Medicine or salt" aria-autocomplete="list" aria-controls="suggestBox">
-            <div class="suggest" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
-        </div>
-        <div class="field" style="border-left:1px solid var(--line)">
-            <i class="bi bi-geo-alt" aria-hidden="true"></i>
-            <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area" aria-label="City or area">
-            <button type="button" class="loc-btn" id="locateBtn" title="Use my location" aria-label="Use my location"><i class="bi bi-crosshair" aria-hidden="true"></i></button>
-        </div>
-        <select id="sort" name="sort" class="form-select" style="border:0;background:transparent;font-size:.9rem" aria-label="Sort results">
-            <option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
-            <option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low to high</option>
-            <option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high to low</option>
-            <option value="stock" {{ 'selected' if sort=='stock' }}>Most in stock</option>
-        </select>
-        <button class="btn btn-primary btn-search" type="submit" aria-label="Search"><i class="bi bi-arrow-right" aria-hidden="true"></i> Search</button>
-    </form>
+<form id="searchForm" class="searchbar mb-3 appear appear--soft" style="grid-template-columns:1fr 200px 170px auto;max-width:100%;--d:0.16s" role="search" aria-label="Medicine search">
+<div class="field">
+<i class="bi bi-search" aria-hidden="true"></i>
+<input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off" aria-label="Medicine or salt" aria-autocomplete="list" aria-controls="suggestBox">
+<div class="suggest" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
+</div>
+<div class="field" style="border-left:1px solid var(--border-soft)">
+<i class="bi bi-geo-alt" aria-hidden="true"></i>
+<input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area" aria-label="City or area">
+<button type="button" class="loc-btn" id="locateBtn" aria-label="Use my location"><i class="bi bi-crosshair" aria-hidden="true"></i></button>
+</div>
+<select id="sort" name="sort" class="form-select" style="border:0;background:transparent;font-size:0.9rem;color:#fff" aria-label="Sort results">
+<option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
+<option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low to high</option>
+<option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high to low</option>
+<option value="stock" {{ 'selected' if sort=='stock' }}>Most in stock</option>
+</select>
+<button class="btn btn-solid btn-search" type="submit" aria-label="Search"><i class="bi bi-arrow-right" aria-hidden="true"></i> Search</button>
+</form>
 
-    <!-- Filters — layout animation, accessible -->
-    <div class="flex gap-2 center" style="flex-wrap:wrap;justify-content:space-between;margin-bottom:1rem">
-        <div class="chips" id="catChips" role="group" aria-label="Filter by category">
-            <button type="button" class="chip {{ '' if category else 'active' }}" data-cat="" aria-pressed="{{ 'true' if not category else 'false' }}">All categories</button>
-            {% for c in categories %}
-            <button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}" aria-pressed="{{ 'true' if category|string == c.id|string else 'false' }}" aria-label="Filter {{ c.name }}">
-                <i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }}
-            </button>
-            {% endfor %}
-        </div>
-        <div class="flex gap-2 center" style="font-size:.85rem">
-            <label class="form-check" style="margin:0"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
-            <select id="rx" class="form-select" style="width:auto;padding:.4rem .6rem;font-size:.85rem" aria-label="Prescription filter">
-                <option value="">Rx &amp; OTC</option>
-                <option value="0" {{ 'selected' if rx=='0' }}>OTC only</option>
-                <option value="1" {{ 'selected' if rx=='1' }}>Prescription</option>
-            </select>
-        </div>
-    </div>
+<div class="flex gap-2 center appear appear--soft" style="flex-wrap:wrap;justify-content:space-between;margin-bottom:1rem;--d:0.28s">
+<div class="chips" id="catChips" role="group" aria-label="Filter by category">
+<button type="button" class="chip {{ '' if category else 'active' }}" data-cat="" aria-pressed="{{ 'true' if not category else 'false' }}">All categories</button>
+{% for c in categories %}
+<button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}" aria-pressed="{{ 'true' if category|string == c.id|string else 'false' }}"><i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }}</button>
+{% endfor %}
+</div>
+<div class="flex gap-2 center" style="font-size:.85rem">
+<label class="form-check" style="margin:0;color:var(--muted)"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
+<select id="rx" class="form-select" style="width:auto;padding:.4rem .6rem;font-size:.85rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);color:#fff" aria-label="Prescription filter">
+<option value="">Rx &amp; OTC</option>
+<option value="0" {{ 'selected' if rx=='0' }}>OTC only</option>
+<option value="1" {{ 'selected' if rx=='1' }}>Prescription</option>
+</select>
+</div>
+</div>
 
-    <div class="results-layout">
-        <!-- Results column -->
-        <div>
-            <div class="flex between center mb-2">
-                <h2 class="mb-0" style="font-size:1.2rem" id="resultTitle">Searching...</h2>
-                <span class="badge badge-teal" id="resultCount" aria-live="polite">—</span>
-            </div>
-            <div class="results-list" id="resultsList" role="list" aria-label="Medicine results" aria-busy="false">
-                <div class="empty"><i class="bi bi-search" aria-hidden="true"></i> Enter a medicine name above to see live availability.</div>
-            </div>
-        </div>
+<div class="results-layout">
+<div>
+<div class="flex between center mb-2 appear appear--soft" style="--d:0.34s">
+<h2 class="mb-0" style="font-size:1.2rem;color:#fff" id="resultTitle">Searching...</h2>
+<span class="badge" id="resultCount" aria-live="polite" style="background:rgba(255,255,255,0.08);border:1px solid var(--border)">—</span>
+</div>
+<div class="results-list" id="resultsList" role="list" aria-label="Medicine results" aria-busy="false">
+<div class="empty"><i class="bi bi-search" aria-hidden="true"></i> Enter a medicine name above to see live availability.</div>
+</div>
+</div>
 
-        <!-- Map column — sticky, motion -->
-        <div class="map-wrap" data-reveal>
-            <div id="map" role="application" aria-label="Map of nearby pharmacies"></div>
-        </div>
-    </div>
+<div class="map-wrap appear appear--scale" data-reveal style="--d:0.40s">
+<div id="map" role="application" aria-label="Map of nearby pharmacies"></div>
+</div>
+</div>
 </div>
 </section>
 {% endblock %}
@@ -76,21 +70,17 @@ const INIT = {
     lng: {{ (lng|float if lng else '')|tojson }},
     sort: {{ sort|tojson }}, inStock: {{ (1 if in_stock else 0)|tojson }}, rx: {{ rx|tojson }}
 };
-
 let map, markers = {}, userMarker, activeCard = null, lastResults = [];
-
 (function init(){
     map = L.map("map", { zoomControl: true, scrollWheelZoom: true }).setView([25.611, 85.143], 12);
     MF.addTileLayer(map);
     markers.layer = L.layerGroup().addTo(map);
-
     if (INIT.lat && INIT.lng) {
         MF.userPos = { lat: +INIT.lat, lng: +INIT.lng };
         placeUser();
     } else {
         MF.getUserLocation().then(pos=>{ placeUser(); runSearch(); }).catch(()=>{});
     }
-
     document.getElementById("searchForm").addEventListener("submit", e=>{ e.preventDefault(); runSearch(); });
     document.getElementById("locateBtn").addEventListener("click", locateUser);
     document.getElementById("sort").addEventListener("change", runSearch);
@@ -102,8 +92,6 @@ let map, markers = {}, userMarker, activeCard = null, lastResults = [];
         c.classList.add("active"); c.setAttribute("aria-pressed","true");
         runSearch();
     });
-
-    // autocomplete with keyboard nav
     const q = document.getElementById("q"), box = document.getElementById("suggestBox");
     let items=[];
     q.addEventListener("input", async()=>{
@@ -126,17 +114,14 @@ let map, markers = {}, userMarker, activeCard = null, lastResults = [];
         if (e.key==="ArrowUp") { e.preventDefault(); const n=cur<=0?opts.length-1:cur-1; opts.forEach(o=>o.setAttribute("aria-selected","false")); opts[n].setAttribute("aria-selected","true"); }
         if (e.key==="Enter" && cur>=0) { e.preventDefault(); q.value=items[cur].med_name; box.classList.remove("open"); runSearch(); }
     });
-
     if (INIT.q) runSearch();
 })();
-
 function placeUser(){
     if(!MF.userPos) return;
     if(userMarker) map.removeLayer(userMarker);
     userMarker = L.marker([MF.userPos.lat, MF.userPos.lng], { icon: MF.makeIcon("user"), zIndexOffset: 1000 }).addTo(map)
         .bindPopup("<strong>You are here</strong>");
 }
-
 async function locateUser(){
     const btn = document.getElementById("locateBtn");
     const orig = btn.innerHTML;
@@ -153,12 +138,10 @@ async function locateUser(){
     } catch { MF.toast("Couldn't access location", "warning"); }
     finally { btn.innerHTML = orig; btn.disabled = false; }
 }
-
 function activeCat(){
     const a = document.querySelector("#catChips .chip.active");
     return a ? a.dataset.cat : "";
 }
-
 async function runSearch(){
     const q = document.getElementById("q").value.trim();
     const params = new URLSearchParams({
@@ -169,7 +152,6 @@ async function runSearch(){
         cat: activeCat(),
     });
     if (MF.userPos) { params.set("lat", MF.userPos.lat); params.set("lng", MF.userPos.lng); }
-
     const list = document.getElementById("resultsList");
     list.setAttribute("aria-busy","true");
     list.innerHTML = Array(3).fill(0).map(()=>`
@@ -180,7 +162,6 @@ async function runSearch(){
         </div>`).join("");
     document.getElementById("resultTitle").textContent = q ? `Results for "${q}"` : "All inventory";
     document.getElementById("resultCount").textContent = "...";
-
     try {
         const r = await fetch(`/api/search?${params}`);
         const data = await r.json();
@@ -192,24 +173,22 @@ async function runSearch(){
         list.setAttribute("aria-busy","false");
     }
 }
-
 function render(results){
     const list = document.getElementById("resultsList");
     document.getElementById("resultCount").textContent = `${results.length} found`;
     markers.layer.clearLayers();
     activeCard = null;
-
     if(!results.length){
         list.innerHTML = `<div class="empty"><i class="bi bi-emoji-frown" aria-hidden="true"></i>
             <strong>No matches.</strong><br><span class="small">Try the generic salt name, a different area, or uncheck "In stock only".</span></div>`;
         return;
     }
-
     list.innerHTML = "";
     const bounds = [];
     results.forEach((it, i)=>{
         const card = document.createElement("div");
-        card.className = "med-card";
+        card.className = "med-card appear appear--soft";
+        card.style.setProperty("--d", (0.05 + i*0.04)+"s");
         card.setAttribute("role","listitem");
         card.setAttribute("tabindex","0");
         card.setAttribute("aria-label", `${it.med_name} at ${it.shop_name}, ${it.stock_quantity} in stock, ${MF.fmtMoney(it.price)}`);
@@ -224,7 +203,6 @@ function render(results){
         const open = it.open_now
             ? `<span class="open-dot" aria-hidden="true"></span> Open now`
             : `<span class="open-dot closed" aria-hidden="true"></span> Closed`;
-
         card.innerHTML = `
             <div class="med-top">
                 <div>
@@ -240,16 +218,15 @@ function render(results){
             <div class="med-shop">
                 <div>
                     <a href="/pharmacy/${it.shop_id}" class="shop-name" onclick="event.stopPropagation()" aria-label="View ${it.shop_name} profile">
-                        <i class="bi bi-shop text-teal" aria-hidden="true"></i> ${it.shop_name}
+                        <i class="bi bi-shop" aria-hidden="true"></i> ${it.shop_name}
                     </a>
                     <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt" aria-hidden="true"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building" aria-hidden="true"></i> ${it.manufacturer}</span>`:""}</div>
                 </div>
                 <div class="flex gap-2" style="flex:none">
                     <button class="btn btn-ghost btn-sm" title="Save" data-fav aria-label="Save ${it.med_name} to favourites"><i class="bi bi-bookmark" aria-hidden="true"></i></button>
-                    <button class="btn btn-primary btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve aria-label="Hold ${it.med_name} at ${it.shop_name}"><i class="bi bi-bag-check" aria-hidden="true"></i> Hold</button>
+                    <button class="btn btn-solid btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve aria-label="Hold ${it.med_name} at ${it.shop_name}"><i class="bi bi-bag-check" aria-hidden="true"></i> Hold</button>
                 </div>
             </div>`;
-
         card.addEventListener("mouseenter", ()=>{ highlight(i); });
         card.addEventListener("focus", ()=>{ highlight(i); });
         card.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ MF.openReserve(it.med_id, it.med_name, it.shop_name); } });
@@ -262,7 +239,6 @@ function render(results){
             MF.toggleFavourite(it.med_name, it.salt_composition, e.currentTarget);
         });
         list.appendChild(card);
-
         if (it.lat && it.lng){
             const m = L.marker([it.lat, it.lng], { icon: MF.makeIcon() }).addTo(markers.layer);
             m.bindPopup(popupHtml(it));
@@ -271,28 +247,23 @@ function render(results){
             markers[i] = m;
         }
     });
-
     if (MF.userPos) bounds.push([MF.userPos.lat, MF.userPos.lng]);
     if (bounds.length) map.fitBounds(bounds, { padding:[40,40], maxZoom:14 });
-
-    // Dispatch event for motion.js to stagger
     document.dispatchEvent(new CustomEvent("mf:results-rendered", { detail: { count: results.length } }));
 }
-
 function popupHtml(it){
-    return `<h6>${it.shop_name}</h6>
-        <div class="mb-1"><strong>${it.med_name}</strong> ${it.dosage?`<small>· ${it.dosage}</small>`:""}</div>
-        <div class="text-muted small mb-1">${it.salt_composition||""}</div>
+    return `<h6 style="color:#111">${it.shop_name}</h6>
+        <div class="mb-1" style="color:#111"><strong>${it.med_name}</strong> ${it.dosage?`<small>· ${it.dosage}</small>`:""}</div>
+        <div class="text-muted small mb-1" style="color:#666">${it.salt_composition||""}</div>
         <div class="flex between center mb-2">
-            <strong style="color:var(--teal-700);font-size:1.05rem">${MF.fmtMoney(it.price)}</strong>
+            <strong style="color:#111;font-size:1.05rem">${MF.fmtMoney(it.price)}</strong>
             <span class="tag ${it.stock_quantity>0?'tag-stock':'tag-out'}">${it.stock_quantity>0?it.stock_quantity+' in stock':'Out of stock'}</span>
         </div>
-        <button class="btn btn-primary btn-sm btn-block" ${it.stock_quantity>0?"":"disabled"}
+        <button class="btn btn-solid btn-sm btn-block" ${it.stock_quantity>0?"":"disabled"}
             onclick="MF.openReserve(${it.med_id}, '${it.med_name.replace(/'/g,"\\'")}', '${it.shop_name.replace(/'/g,"\\'")}')">
             <i class="bi bi-bag-check" aria-hidden="true"></i> Hold for 2 hours
         </button>`;
 }
-
 function highlight(i){
     const cards = document.querySelectorAll(".med-card");
     cards.forEach(c=>c.classList.remove("active"));
