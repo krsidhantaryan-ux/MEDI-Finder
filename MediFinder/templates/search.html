@@ -3,42 +3,42 @@
 {% block title %}Search results — MediFinder{% endblock %}
 
 {% block content %}
-<section class="section-tight" style="padding-top:1.5rem">
+<section class="section-tight" style="padding-top:1.25rem">
 <div class="container">
-    <!-- Search bar -->
-    <form id="searchForm" class="searchbar mb-3" style="grid-template-columns:1fr 200px 170px auto">
+    <!-- Search bar — motion focus -->
+    <form id="searchForm" class="searchbar mb-3" style="grid-template-columns:1fr 200px 170px auto" role="search" aria-label="Medicine search">
         <div class="field">
-            <i class="bi bi-search"></i>
-            <input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off">
-            <div class="suggest" id="suggestBox"></div>
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="text" id="q" name="q" value="{{ query }}" placeholder="Medicine or salt..." autocomplete="off" aria-label="Medicine or salt" aria-autocomplete="list" aria-controls="suggestBox">
+            <div class="suggest" id="suggestBox" role="listbox" aria-label="Suggestions"></div>
         </div>
         <div class="field" style="border-left:1px solid var(--line)">
-            <i class="bi bi-geo-alt"></i>
-            <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area">
-            <button type="button" class="loc-btn" id="locateBtn" title="Use my location"><i class="bi bi-crosshair"></i></button>
+            <i class="bi bi-geo-alt" aria-hidden="true"></i>
+            <input type="text" id="city" name="city" value="{{ city }}" placeholder="City / area" aria-label="City or area">
+            <button type="button" class="loc-btn" id="locateBtn" title="Use my location" aria-label="Use my location"><i class="bi bi-crosshair" aria-hidden="true"></i></button>
         </div>
-        <select id="sort" name="sort" class="form-select" style="border:0;background:transparent;font-size:.9rem">
+        <select id="sort" name="sort" class="form-select" style="border:0;background:transparent;font-size:.9rem" aria-label="Sort results">
             <option value="distance" {{ 'selected' if sort=='distance' }}>Nearest first</option>
             <option value="price_asc" {{ 'selected' if sort=='price_asc' }}>Price: low to high</option>
             <option value="price_desc" {{ 'selected' if sort=='price_desc' }}>Price: high to low</option>
             <option value="stock" {{ 'selected' if sort=='stock' }}>Most in stock</option>
         </select>
-        <button class="btn btn-primary btn-search" type="submit"><i class="bi bi-arrow-right"></i> Search</button>
+        <button class="btn btn-primary btn-search" type="submit" aria-label="Search"><i class="bi bi-arrow-right" aria-hidden="true"></i> Search</button>
     </form>
 
-    <!-- Filters -->
+    <!-- Filters — layout animation, accessible -->
     <div class="flex gap-2 center" style="flex-wrap:wrap;justify-content:space-between;margin-bottom:1rem">
-        <div class="chips" id="catChips">
-            <button type="button" class="chip {{ '' if category else 'active' }}" data-cat="">All categories</button>
+        <div class="chips" id="catChips" role="group" aria-label="Filter by category">
+            <button type="button" class="chip {{ '' if category else 'active' }}" data-cat="" aria-pressed="{{ 'true' if not category else 'false' }}">All categories</button>
             {% for c in categories %}
-            <button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}">
-                <i class="bi {{ c.icon }}"></i> {{ c.name }}
+            <button type="button" class="chip {{ 'active' if category|string == c.id|string }}" data-cat="{{ c.id }}" aria-pressed="{{ 'true' if category|string == c.id|string else 'false' }}" aria-label="Filter {{ c.name }}">
+                <i class="bi {{ c.icon }}" aria-hidden="true"></i> {{ c.name }}
             </button>
             {% endfor %}
         </div>
         <div class="flex gap-2 center" style="font-size:.85rem">
-            <label class="form-check" style="margin:0"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }}> In stock only</label>
-            <select id="rx" class="form-select" style="width:auto;padding:.4rem .6rem;font-size:.85rem">
+            <label class="form-check" style="margin:0"><input type="checkbox" id="inStock" {{ 'checked' if in_stock else '' }} aria-label="In stock only"> In stock only</label>
+            <select id="rx" class="form-select" style="width:auto;padding:.4rem .6rem;font-size:.85rem" aria-label="Prescription filter">
                 <option value="">Rx &amp; OTC</option>
                 <option value="0" {{ 'selected' if rx=='0' }}>OTC only</option>
                 <option value="1" {{ 'selected' if rx=='1' }}>Prescription</option>
@@ -51,16 +51,16 @@
         <div>
             <div class="flex between center mb-2">
                 <h2 class="mb-0" style="font-size:1.2rem" id="resultTitle">Searching...</h2>
-                <span class="badge badge-teal" id="resultCount">—</span>
+                <span class="badge badge-teal" id="resultCount" aria-live="polite">—</span>
             </div>
-            <div class="results-list" id="resultsList">
-                <div class="empty"><i class="bi bi-search"></i> Enter a medicine name above to see live availability.</div>
+            <div class="results-list" id="resultsList" role="list" aria-label="Medicine results" aria-busy="false">
+                <div class="empty"><i class="bi bi-search" aria-hidden="true"></i> Enter a medicine name above to see live availability.</div>
             </div>
         </div>
 
-        <!-- Map column -->
-        <div class="map-wrap">
-            <div id="map"></div>
+        <!-- Map column — sticky, motion -->
+        <div class="map-wrap" data-reveal>
+            <div id="map" role="application" aria-label="Map of nearby pharmacies"></div>
         </div>
     </div>
 </div>
@@ -84,7 +84,6 @@ let map, markers = {}, userMarker, activeCard = null, lastResults = [];
     MF.addTileLayer(map);
     markers.layer = L.layerGroup().addTo(map);
 
-    // Try to restore / get location
     if (INIT.lat && INIT.lng) {
         MF.userPos = { lat: +INIT.lat, lng: +INIT.lng };
         placeUser();
@@ -99,23 +98,34 @@ let map, markers = {}, userMarker, activeCard = null, lastResults = [];
     document.getElementById("rx").addEventListener("change", runSearch);
     document.getElementById("catChips").addEventListener("click", e=>{
         const c = e.target.closest(".chip"); if(!c) return;
-        document.querySelectorAll("#catChips .chip").forEach(x=>x.classList.remove("active"));
-        c.classList.add("active");
+        document.querySelectorAll("#catChips .chip").forEach(x=>{ x.classList.remove("active"); x.setAttribute("aria-pressed","false"); });
+        c.classList.add("active"); c.setAttribute("aria-pressed","true");
         runSearch();
     });
 
-    // autocomplete
+    // autocomplete with keyboard nav
     const q = document.getElementById("q"), box = document.getElementById("suggestBox");
     let items=[];
     q.addEventListener("input", async()=>{
         if(q.value.trim().length<2){box.classList.remove("open");return;}
         items = await (await fetch(`/api/autocomplete?q=${encodeURIComponent(q.value.trim())}`)).json();
         if(!items.length){box.classList.remove("open");return;}
-        box.innerHTML = items.map((it,i)=>`<div class="suggest-item" data-i="${i}"><span><strong>${it.med_name}</strong> <small>${it.salt_composition||""}</small></span></div>`).join("");
+        box.innerHTML = items.map((it,i)=>`<div class="suggest-item" data-i="${i}" role="option" aria-selected="false"><span><strong>${it.med_name}</strong> <small>${it.salt_composition||""}</small></span></div>`).join("");
         box.classList.add("open");
-        box.querySelectorAll(".suggest-item").forEach(el=>el.addEventListener("mousedown",()=>{q.value=items[+el.dataset.i].med_name;box.classList.remove("open");runSearch();}));
+        box.querySelectorAll(".suggest-item").forEach(el=>{
+            el.addEventListener("mousedown",()=>{q.value=items[+el.dataset.i].med_name;box.classList.remove("open");runSearch();});
+            el.addEventListener("mouseenter",()=>{ box.querySelectorAll(".suggest-item").forEach(x=>x.setAttribute("aria-selected","false")); el.setAttribute("aria-selected","true"); });
+        });
     });
     q.addEventListener("blur",()=>setTimeout(()=>box.classList.remove("open"),150));
+    q.addEventListener("keydown", (e)=>{
+        const opts = box.querySelectorAll(".suggest-item");
+        if (!opts.length) return;
+        const cur = Array.from(opts).findIndex(o=>o.getAttribute("aria-selected")==="true");
+        if (e.key==="ArrowDown") { e.preventDefault(); const n=(cur+1)%opts.length; opts.forEach(o=>o.setAttribute("aria-selected","false")); opts[n].setAttribute("aria-selected","true"); }
+        if (e.key==="ArrowUp") { e.preventDefault(); const n=cur<=0?opts.length-1:cur-1; opts.forEach(o=>o.setAttribute("aria-selected","false")); opts[n].setAttribute("aria-selected","true"); }
+        if (e.key==="Enter" && cur>=0) { e.preventDefault(); q.value=items[cur].med_name; box.classList.remove("open"); runSearch(); }
+    });
 
     if (INIT.q) runSearch();
 })();
@@ -129,7 +139,9 @@ function placeUser(){
 
 async function locateUser(){
     const btn = document.getElementById("locateBtn");
-    btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>';
+    btn.disabled = true;
     try {
         await MF.getUserLocation();
         placeUser();
@@ -139,7 +151,7 @@ async function locateUser(){
         MF.toast("Location detected", "success");
         runSearch();
     } catch { MF.toast("Couldn't access location", "warning"); }
-    finally { btn.innerHTML = '<i class="bi bi-crosshair"></i>'; }
+    finally { btn.innerHTML = orig; btn.disabled = false; }
 }
 
 function activeCat(){
@@ -159,8 +171,9 @@ async function runSearch(){
     if (MF.userPos) { params.set("lat", MF.userPos.lat); params.set("lng", MF.userPos.lng); }
 
     const list = document.getElementById("resultsList");
+    list.setAttribute("aria-busy","true");
     list.innerHTML = Array(3).fill(0).map(()=>`
-        <div class="med-card" style="cursor:default">
+        <div class="med-card" style="cursor:default" role="listitem" aria-label="Loading">
             <div class="skeleton sk-title"></div>
             <div class="skeleton sk-line" style="width:50%"></div>
             <div class="skeleton sk-line" style="width:80%"></div>
@@ -174,7 +187,9 @@ async function runSearch(){
         lastResults = data.results || [];
         render(lastResults);
     } catch(e){
-        list.innerHTML = `<div class="empty"><i class="bi bi-wifi-off"></i> Couldn't reach the search service.</div>`;
+        list.innerHTML = `<div class="empty"><i class="bi bi-wifi-off" aria-hidden="true"></i> Couldn't reach the search service.</div>`;
+    } finally {
+        list.setAttribute("aria-busy","false");
     }
 }
 
@@ -185,7 +200,7 @@ function render(results){
     activeCard = null;
 
     if(!results.length){
-        list.innerHTML = `<div class="empty"><i class="bi bi-emoji-frown"></i>
+        list.innerHTML = `<div class="empty"><i class="bi bi-emoji-frown" aria-hidden="true"></i>
             <strong>No matches.</strong><br><span class="small">Try the generic salt name, a different area, or uncheck "In stock only".</span></div>`;
         return;
     }
@@ -195,17 +210,20 @@ function render(results){
     results.forEach((it, i)=>{
         const card = document.createElement("div");
         card.className = "med-card";
+        card.setAttribute("role","listitem");
+        card.setAttribute("tabindex","0");
+        card.setAttribute("aria-label", `${it.med_name} at ${it.shop_name}, ${it.stock_quantity} in stock, ${MF.fmtMoney(it.price)}`);
         const stockTag = it.stock_quantity > 0
-            ? `<span class="tag tag-stock"><i class="bi bi-check2-circle"></i> ${it.stock_quantity} in stock</span>`
-            : `<span class="tag tag-out"><i class="bi bi-x-circle"></i> Out of stock</span>`;
+            ? `<span class="tag tag-stock"><i class="bi bi-check2-circle" aria-hidden="true"></i> ${it.stock_quantity} in stock</span>`
+            : `<span class="tag tag-out"><i class="bi bi-x-circle" aria-hidden="true"></i> Out of stock</span>`;
         const rxTag = it.prescription
-            ? `<span class="tag tag-rx"><i class="bi bi-file-earmark-medical"></i> Rx</span>`
-            : `<span class="tag tag-otc"><i class="bi bi-bag-check"></i> OTC</span>`;
-        const disc = it.discount_pct ? `<span class="tag tag-discount"><i class="bi bi-tags"></i> ${it.discount_pct}% off MRP</span>` : "";
+            ? `<span class="tag tag-rx"><i class="bi bi-file-earmark-medical" aria-hidden="true"></i> Rx</span>`
+            : `<span class="tag tag-otc"><i class="bi bi-bag-check" aria-hidden="true"></i> OTC</span>`;
+        const disc = it.discount_pct ? `<span class="tag tag-discount"><i class="bi bi-tags" aria-hidden="true"></i> ${it.discount_pct}% off MRP</span>` : "";
         const dist = it.distance_km != null ? MF.fmtDistance(it.distance_km) : (it.city||"");
         const open = it.open_now
-            ? `<span class="open-dot"></span> Open now`
-            : `<span class="open-dot closed"></span> Closed`;
+            ? `<span class="open-dot" aria-hidden="true"></span> Open now`
+            : `<span class="open-dot closed" aria-hidden="true"></span> Closed`;
 
         card.innerHTML = `
             <div class="med-top">
@@ -216,23 +234,25 @@ function render(results){
                 <div class="med-price">${MF.fmtMoney(it.price)}</div>
             </div>
             <div class="med-meta">${rxTag}${stockTag}${disc}
-                ${it.category_name?`<span class="tag"><i class="bi bi-tag"></i> ${it.category_name}</span>`:""}
-                ${it.delivery?`<span class="tag"><i class="bi bi-truck"></i> Delivery</span>`:""}
+                ${it.category_name?`<span class="tag"><i class="bi bi-tag" aria-hidden="true"></i> ${it.category_name}</span>`:""}
+                ${it.delivery?`<span class="tag"><i class="bi bi-truck" aria-hidden="true"></i> Delivery</span>`:""}
             </div>
             <div class="med-shop">
                 <div>
-                    <a href="/pharmacy/${it.shop_id}" class="shop-name" onclick="event.stopPropagation()">
-                        <i class="bi bi-shop text-teal"></i> ${it.shop_name}
+                    <a href="/pharmacy/${it.shop_id}" class="shop-name" onclick="event.stopPropagation()" aria-label="View ${it.shop_name} profile">
+                        <i class="bi bi-shop text-teal" aria-hidden="true"></i> ${it.shop_name}
                     </a>
-                    <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building"></i> ${it.manufacturer}</span>`:""}</div>
+                    <div class="shop-sub"><span>${open}</span><span><i class="bi bi-geo-alt" aria-hidden="true"></i> ${dist}</span>${it.manufacturer?`<span><i class="bi bi-building" aria-hidden="true"></i> ${it.manufacturer}</span>`:""}</div>
                 </div>
                 <div class="flex gap-2" style="flex:none">
-                    <button class="btn btn-ghost btn-sm" title="Save" data-fav><i class="bi bi-bookmark"></i></button>
-                    <button class="btn btn-primary btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve><i class="bi bi-bag-check"></i> Hold</button>
+                    <button class="btn btn-ghost btn-sm" title="Save" data-fav aria-label="Save ${it.med_name} to favourites"><i class="bi bi-bookmark" aria-hidden="true"></i></button>
+                    <button class="btn btn-primary btn-sm" ${it.stock_quantity>0?"":"disabled"} data-reserve aria-label="Hold ${it.med_name} at ${it.shop_name}"><i class="bi bi-bag-check" aria-hidden="true"></i> Hold</button>
                 </div>
             </div>`;
 
         card.addEventListener("mouseenter", ()=>{ highlight(i); });
+        card.addEventListener("focus", ()=>{ highlight(i); });
+        card.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ MF.openReserve(it.med_id, it.med_name, it.shop_name); } });
         card.querySelector("[data-reserve]")?.addEventListener("click", e=>{
             e.stopPropagation();
             MF.openReserve(it.med_id, it.med_name, it.shop_name);
@@ -246,7 +266,7 @@ function render(results){
         if (it.lat && it.lng){
             const m = L.marker([it.lat, it.lng], { icon: MF.makeIcon() }).addTo(markers.layer);
             m.bindPopup(popupHtml(it));
-            m.on("click", ()=>{ setActive(i); card.scrollIntoView({behavior:"smooth", block:"nearest"}); });
+            m.on("click", ()=>{ setActive(i); card.scrollIntoView({behavior:"smooth", block:"nearest"}); card.focus(); });
             bounds.push([it.lat, it.lng]);
             markers[i] = m;
         }
@@ -254,6 +274,9 @@ function render(results){
 
     if (MF.userPos) bounds.push([MF.userPos.lat, MF.userPos.lng]);
     if (bounds.length) map.fitBounds(bounds, { padding:[40,40], maxZoom:14 });
+
+    // Dispatch event for motion.js to stagger
+    document.dispatchEvent(new CustomEvent("mf:results-rendered", { detail: { count: results.length } }));
 }
 
 function popupHtml(it){
@@ -266,7 +289,7 @@ function popupHtml(it){
         </div>
         <button class="btn btn-primary btn-sm btn-block" ${it.stock_quantity>0?"":"disabled"}
             onclick="MF.openReserve(${it.med_id}, '${it.med_name.replace(/'/g,"\\'")}', '${it.shop_name.replace(/'/g,"\\'")}')">
-            <i class="bi bi-bag-check"></i> Hold for 2 hours
+            <i class="bi bi-bag-check" aria-hidden="true"></i> Hold for 2 hours
         </button>`;
 }
 
