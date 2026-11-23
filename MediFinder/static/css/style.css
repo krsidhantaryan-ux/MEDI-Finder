@@ -147,13 +147,28 @@ button,
     cursor: pointer;
 }
 
-/* Bootstrap Primary & Outline Harmonization */
+/* Bootstrap Primary & Outline Harmonization (preserves --bs-bg-opacity for bg-opacity-* utilities) */
 .text-primary {
     color: var(--color-primary) !important;
 }
 
 .bg-primary {
-    background-color: #0f766e !important;
+    --bs-bg-opacity: 1;
+    background-color: rgba(var(--bs-primary-rgb), var(--bs-bg-opacity)) !important;
+}
+
+.badge.bg-primary-subtle,
+#clinical-rxcui-badge {
+    background-color: rgba(15, 118, 110, 0.12) !important;
+    color: #0b5c56 !important;
+    border-color: rgba(15, 118, 110, 0.35) !important;
+}
+
+.badge.bg-success-subtle,
+#clinical-source-badge {
+    background-color: rgba(21, 128, 61, 0.12) !important;
+    color: #14532d !important;
+    border-color: rgba(21, 128, 61, 0.35) !important;
 }
 
 .btn-primary {
@@ -333,9 +348,11 @@ button,
     color: #f8fafc;
 }
 
-[data-theme="dark"] .badge.bg-success-subtle {
+[data-theme="dark"] .badge.bg-success-subtle,
+[data-theme="dark"] #clinical-source-badge {
     background-color: rgba(21, 128, 61, 0.28) !important;
     color: #86efac !important;
+    border-color: rgba(74, 222, 128, 0.42) !important;
 }
 
 [data-theme="dark"] .badge.bg-warning-subtle {
@@ -348,9 +365,11 @@ button,
     color: #fca5a5 !important;
 }
 
-[data-theme="dark"] .badge.bg-primary-subtle {
+[data-theme="dark"] .badge.bg-primary-subtle,
+[data-theme="dark"] #clinical-rxcui-badge {
     background-color: rgba(20, 184, 166, 0.24) !important;
     color: #5eead4 !important;
+    border-color: rgba(45, 212, 191, 0.42) !important;
 }
 
 @keyframes pageFadeIn {

@@ -752,6 +752,12 @@ class MediFinderAppTestCase(unittest.TestCase):
         home_html = self.client.get("/").get_data(as_text=True)
         self.assertIn("toggle-osm-layer-btn", home_html)
         self.assertIn("osm-nearby-count-badge", home_html)
+        self.assertIn('id="clinical-rxcui-badge"', home_html)
+        with self.client.get("/static/css/style.css") as css_res:
+            css_text = css_res.get_data(as_text=True)
+        self.assertIn("rgba(var(--bs-primary-rgb), var(--bs-bg-opacity))", css_text)
+        self.assertIn("#clinical-rxcui-badge", css_text)
+        self.assertNotIn(".bg-primary {\n    background-color: #0f766e !important;\n}", css_text)
         with self.client.get("/static/js/main.js") as js_res:
             js_text = js_res.get_data(as_text=True)
         for hook in (
