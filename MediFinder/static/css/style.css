@@ -22,11 +22,11 @@
 [data-theme="dark"] span,
 [data-theme="dark"] label,
 [data-theme="dark"] .form-label,
-[data-theme="dark"] h1, 
-[data-theme="dark"] h2, 
-[data-theme="dark"] h3, 
-[data-theme="dark"] h4, 
-[data-theme="dark"] h5, 
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
 [data-theme="dark"] h6 {
     color: #f8fafc !important;
 }
@@ -72,7 +72,8 @@
 [data-theme="dark"] .hero-waves .shape-fill {
     fill: #0b0f19;
 }
-/* --- FIX LIGHT BADGES & MAP POPUPS IN DARK MODE --- */
+
+/* --- FIX LIGHT BADGES, MODALS, SELECTS & MAP POPUPS IN DARK MODE --- */
 [data-theme="dark"] .bg-light {
     background-color: rgba(255, 255, 255, 0.1) !important;
     color: #f8fafc !important;
@@ -89,6 +90,68 @@
 [data-theme="dark"] .leaflet-popup-content .text-dark {
     color: #f8fafc !important;
 }
+
+[data-theme="dark"] .leaflet-tile-pane {
+    filter: brightness(0.9) contrast(1.04);
+}
+
+[data-theme="dark"] .leaflet-control-layers {
+    background-color: #121826 !important;
+    color: #f8fafc !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+#map,
+#admin-map {
+    background-color: #e6eef6;
+    background-image:
+        linear-gradient(rgba(13, 110, 253, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(13, 110, 253, 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+}
+
+[data-theme="dark"] #map,
+[data-theme="dark"] #admin-map {
+    background-color: #0f172a;
+    background-image:
+        linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+}
+
+[data-theme="dark"] .modal-content.glass-card {
+    background: rgba(15, 23, 42, 0.96) !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+[data-theme="dark"] .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+[data-theme="dark"] select.glass-input option {
+    background-color: #0f172a;
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .badge.bg-success-subtle {
+    background-color: rgba(25, 135, 84, 0.25) !important;
+    color: #6ee7b7 !important;
+}
+
+[data-theme="dark"] .badge.bg-warning-subtle {
+    background-color: rgba(255, 193, 7, 0.22) !important;
+    color: #fde68a !important;
+}
+
+[data-theme="dark"] .badge.bg-danger-subtle {
+    background-color: rgba(220, 53, 69, 0.25) !important;
+    color: #fca5a5 !important;
+}
+
+[data-theme="dark"] .badge.bg-primary-subtle {
+    background-color: rgba(13, 110, 253, 0.25) !important;
+    color: #93c5fd !important;
+}
+
 /* Base Body Styles & Fade Transition */
 body {
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -148,12 +211,13 @@ body {
 /* --- HERO SECTION --- */
 .hero-wrapper {
     position: relative;
+    z-index: 5;
     background: var(--liquid-gradient);
     background-size: 400% 400%;
     animation: liquidGradient 12s ease infinite;
     padding-top: 4rem;
     padding-bottom: 6rem;
-    overflow: hidden;
+    overflow: visible;
 }
 
 @keyframes liquidGradient {
@@ -254,6 +318,36 @@ body {
     color: #64748b !important;
 }
 
+/* --- QUICK SEARCH CHIPS --- */
+.quick-chip {
+    font-size: 0.78rem;
+    padding: 0.22rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(13, 110, 253, 0.25);
+    background: rgba(13, 110, 253, 0.08);
+    color: #0d6efd;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.quick-chip:hover {
+    background: #0d6efd;
+    color: #ffffff !important;
+    border-color: #0d6efd;
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .quick-chip {
+    background: rgba(13, 110, 253, 0.18);
+    border-color: rgba(96, 165, 250, 0.35);
+    color: #93c5fd !important;
+}
+
+[data-theme="dark"] .quick-chip:hover {
+    background: #0d6efd;
+    color: #ffffff !important;
+}
+
 /* --- ANIMATIONS & INTERACTION --- */
 .list-group-item-action {
     transition: all 0.25s cubic-bezier(0.165, 0.84, 0.44, 1);
@@ -294,9 +388,13 @@ body {
 
 /* --- PULSING MAP MARKERS --- */
 .custom-pulsing-pin {
-    position: relative;
-    width: 20px;
-    height: 20px;
+    background: transparent;
+    border: none;
+}
+
+.leaflet-marker-icon.custom-pulsing-pin,
+.leaflet-marker-icon.custom-user-pin {
+    position: absolute !important;
 }
 
 .pin-core {
@@ -329,6 +427,122 @@ body {
     100% { transform: scale(1.6); opacity: 0; }
 }
 
+/* --- PULSING USER CURRENT LOCATION MARKER --- */
+.custom-user-pin {
+    background: transparent;
+    border: none;
+}
+
+.user-pin-core {
+    width: 16px;
+    height: 16px;
+    background: #dc3545;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    z-index: 2;
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.85);
+}
+
+.user-pin-pulse {
+    width: 36px;
+    height: 36px;
+    background: rgba(220, 53, 69, 0.38);
+    border-radius: 50%;
+    position: absolute;
+    top: -7px;
+    left: -7px;
+    z-index: 1;
+    animation: markerPulse 1.8s infinite ease-out;
+}
+
+.leaflet-tooltip.user-location-tooltip {
+    background: rgba(255, 255, 255, 0.96);
+    color: #1e293b;
+    border: 1.5px solid rgba(220, 53, 69, 0.45);
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.22);
+    white-space: nowrap;
+}
+
+.leaflet-tooltip.user-location-tooltip::before {
+    border-bottom-color: rgba(220, 53, 69, 0.45);
+}
+
+[data-theme="dark"] .leaflet-tooltip.user-location-tooltip {
+    background: rgba(15, 23, 42, 0.94);
+    color: #f8fafc;
+    border-color: rgba(248, 113, 113, 0.55);
+}
+
+@keyframes locateSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.locating-spin {
+    display: inline-block;
+    animation: locateSpin 1s linear infinite;
+}
+
+.gps-iframe-notice {
+    position: absolute;
+    top: 12px;
+    left: 54px;
+    right: 54px;
+    z-index: 1000;
+    padding: 0.55rem 0.85rem;
+    border-radius: 14px !important;
+}
+
+/* --- IN-MAP DIRECTIONS BANNER & DISTANCE CALLOUT --- */
+.route-info-banner {
+    position: absolute;
+    bottom: 18px;
+    left: 18px;
+    right: 18px;
+    max-width: 430px;
+    z-index: 1000;
+    padding: 0.7rem 0.95rem;
+    border-radius: 16px !important;
+}
+
+.route-icon-badge {
+    width: 34px;
+    height: 34px;
+}
+
+.route-midpoint-wrapper {
+    background: transparent;
+    border: none;
+}
+
+.route-midpoint-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    background: #0d6efd;
+    color: #ffffff !important;
+    font-size: 0.76rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 2px solid #ffffff;
+    box-shadow: 0 4px 14px rgba(13, 110, 253, 0.45);
+    transform: translate(-50%, -50%);
+}
+
+.route-midpoint-badge span,
+.route-midpoint-badge i {
+    color: #ffffff !important;
+}
+
 /* --- SKELETON LOADING --- */
 .skeleton {
     background: linear-gradient(90deg, rgba(200, 200, 200, 0.15) 25%, rgba(200, 200, 200, 0.3) 50%, rgba(200, 200, 200, 0.15) 75%);
@@ -351,6 +565,91 @@ body {
     top: 20px;
     right: 20px;
     z-index: 9999;
+}
+
+/* --- LIVE LOCATION & PIN AUTOCOMPLETE DROPDOWN --- */
+.location-autocomplete-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 2000;
+    max-height: 250px;
+    overflow-y: auto;
+    border-radius: 16px !important;
+    padding: 0.35rem;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.97) !important;
+}
+
+[data-theme="dark"] .location-autocomplete-menu {
+    background: rgba(15, 23, 42, 0.97) !important;
+}
+
+.location-autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 0.48rem 0.7rem;
+    border-radius: 10px;
+    text-align: left;
+    font-size: 0.84rem;
+    color: #1e293b;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.location-autocomplete-item:hover {
+    background: rgba(13, 110, 253, 0.1);
+}
+
+[data-theme="dark"] .location-autocomplete-item {
+    color: #f8fafc;
+}
+
+[data-theme="dark"] .location-autocomplete-item:hover {
+    background: rgba(59, 130, 246, 0.22);
+}
+
+/* --- LIVE LOCAL WEATHER, AQI & STORAGE ADVISORY BAR (OPEN-METEO) --- */
+.local-env-bar {
+    border-radius: 16px !important;
+    padding: 0.65rem 1rem;
+}
+
+.env-metric-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.22rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(13, 110, 253, 0.08);
+    border: 1px solid rgba(13, 110, 253, 0.2);
+    color: #0d6efd;
+}
+
+[data-theme="dark"] .env-metric-pill {
+    background: rgba(59, 130, 246, 0.18);
+    border-color: rgba(96, 165, 250, 0.32);
+    color: #93c5fd;
+}
+
+/* --- CLINICAL REFERENCE MODAL CARDS (RXNORM + OPENFDA) --- */
+.clinical-section-box {
+    border-radius: 14px;
+    padding: 0.75rem 0.95rem;
+    background: rgba(248, 250, 252, 0.8);
+    border: 1px solid rgba(203, 213, 225, 0.65);
+}
+
+[data-theme="dark"] .clinical-section-box {
+    background: rgba(30, 41, 59, 0.65);
+    border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* --- SCROLLBAR --- */
