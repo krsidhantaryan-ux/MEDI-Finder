@@ -278,8 +278,8 @@ def ensure_postgres_schema(conn):
     conn.execute("""
     CREATE TABLE IF NOT EXISTS shops (
         id SERIAL PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        city TEXT,
+        name TEXT NOT NULL,
+        city TEXT DEFAULT '',
         password TEXT NOT NULL,
         lat DOUBLE PRECISION,
         lng DOUBLE PRECISION,
@@ -318,6 +318,19 @@ def ensure_postgres_schema(conn):
         pickup_code TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP
+    )
+    """)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS medicine_catalog (
+        id SERIAL PRIMARY KEY,
+        med_name TEXT NOT NULL,
+        manufacturer TEXT DEFAULT '',
+        salt_composition TEXT DEFAULT '',
+        pack_size TEXT DEFAULT '',
+        mrp DOUBLE PRECISION DEFAULT 0.0,
+        is_generic INTEGER DEFAULT 0,
+        rx_required INTEGER DEFAULT 0,
+        source TEXT DEFAULT ''
     )
     """)
     conn.commit()
@@ -439,6 +452,22 @@ def ensure_schema(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_inventory_med_name ON inventory(med_name)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_reservations_inv_status ON reservations(inventory_id, status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_reservations_phone_status ON reservations(customer_phone, status)")
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS medicine_catalog (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        med_name TEXT NOT NULL,
+        manufacturer TEXT DEFAULT '',
+        salt_composition TEXT DEFAULT '',
+        pack_size TEXT DEFAULT '',
+        mrp REAL DEFAULT 0.0,
+        is_generic INTEGER DEFAULT 0,
+        rx_required INTEGER DEFAULT 0,
+        source TEXT DEFAULT ''
+    )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalog_med_name ON medicine_catalog(med_name)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_catalog_salt ON medicine_catalog(salt_composition)")
     conn.commit()
 
 
@@ -880,10 +909,63 @@ def serve_upload(filename):
 
 @app.route("/api/health")
 def api_health():
+    db = get_db()
+    cat_row = db.execute("SELECT COUNT(*) FROM medicine_catalog").fetchone()
+    catalog_count = int(cat_row[0]) if cat_row else 0
     return jsonify({
         "status": "ok",
         "db_engine": "postgresql" if get_active_postgres_url() else "sqlite",
+        "catalog_count": catalog_count,
+        "supabase_project_ref": os.environ.get("SUPABASE_PROJECT_REF", "mqgejhfudhnliyyzomur"),
     })
+
+
+@app.route("/api/catalog")
+def api_catalog():
+    q = request.args.get("q", "").strip()
+    generic_only = request.args.get("generic_only", "").lower() in ("1", "true", "yes")
+    limit = min(50, max(1, request.args.get("limit", type=int, default=12)))
+
+    db = get_db()
+    if not q:
+        where_sql = "WHERE is_generic = 1" if generic_only else ""
+        rows = db.execute(f"""
+            SELECT id, med_name, manufacturer, salt_composition, pack_size, mrp, is_generic, rx_required, source
+            FROM medicine_catalog
+            {where_sql}
+            ORDER BY id ASC
+            LIMIT ?
+        """, (limit,)).fetchall()
+    else:
+        prefix_term = f"{q}%"
+        any_term = f"%{q}%"
+        gen_clause = "AND is_generic = 1" if generic_only else ""
+        rows = db.execute(f"""
+            SELECT id, med_name, manufacturer, salt_composition, pack_size, mrp, is_generic, rx_required, source
+            FROM medicine_catalog
+            WHERE (LOWER(med_name) LIKE LOWER(?) OR LOWER(salt_composition) LIKE LOWER(?))
+            {gen_clause}
+            ORDER BY
+                CASE WHEN LOWER(med_name) LIKE LOWER(?) THEN 0 ELSE 1 END,
+                is_generic DESC,
+                mrp ASC
+            LIMIT ?
+        """, (any_term, any_term, prefix_term, limit)).fetchall()
+
+    out = []
+    for r in rows:
+        out.append({
+            "id": r["id"],
+            "med_name": r["med_name"],
+            "manufacturer": r["manufacturer"] or "",
+            "salt_composition": r["salt_composition"] or "",
+            "pack_size": r["pack_size"] or "",
+            "mrp": round(float(r["mrp"] or 0.0), 2),
+            "is_generic": bool(r["is_generic"]),
+            "rx_required": infer_rx_required(r["med_name"], r["salt_composition"], r["rx_required"]),
+            "source": r["source"] or "Indian Medicine Catalog",
+        })
+    return jsonify(out)
 
 
 @app.route("/api/csrf-token")
@@ -1002,14 +1084,48 @@ def api_autocomplete():
             "store_count": len(entry["store_ids"]),
             "in_stock_stores": len(entry["in_stock_stores"]),
             "rx_required": entry["rx_required"],
+            "manufacturer": "",
+            "pack_size": "",
+            "is_catalog_only": False,
             "_rank": (0 if entry["starts_with"] else 1, -len(entry["in_stock_stores"]), entry["med_name"].lower()),
         })
+
+    # Augment with real Indian Branded + Jan Aushadhi Catalog matches not yet in local store inventory
+    if len(suggestions) < 10 and len(q) >= 2:
+        cat_rows = db.execute("""
+            SELECT med_name, manufacturer, salt_composition, pack_size, mrp, is_generic, rx_required, source
+            FROM medicine_catalog
+            WHERE LOWER(med_name) LIKE LOWER(?) OR LOWER(salt_composition) LIKE LOWER(?)
+            ORDER BY
+                CASE WHEN LOWER(med_name) LIKE LOWER(?) THEN 0 ELSE 1 END,
+                is_generic DESC,
+                mrp ASC
+            LIMIT 12
+        """, (like_any, like_any, f"{q}%")).fetchall()
+        for c in cat_rows:
+            cname = (c["med_name"] or "").strip()
+            if not cname or cname.lower() in grouped:
+                continue
+            grouped[cname.lower()] = True
+            csalt = (c["salt_composition"] or "").strip()
+            suggestions.append({
+                "med_name": cname,
+                "salt_composition": csalt,
+                "min_price": round(float(c["mrp"] or 0.0), 2),
+                "store_count": 0,
+                "in_stock_stores": 0,
+                "rx_required": infer_rx_required(cname, csalt, c["rx_required"]),
+                "manufacturer": c["manufacturer"] or ("PMBJP Jan Aushadhi" if c["is_generic"] else ""),
+                "pack_size": c["pack_size"] or "",
+                "is_catalog_only": True,
+                "_rank": (2 if (cname.lower().startswith(q_lower) or csalt.lower().startswith(q_lower)) else 3, 0, cname.lower()),
+            })
 
     suggestions.sort(key=lambda item: item["_rank"])
     for item in suggestions:
         item.pop("_rank", None)
 
-    return jsonify(suggestions[:8])
+    return jsonify(suggestions[:10])
 
 
 @app.route("/api/search")
@@ -1153,6 +1269,21 @@ def api_substitutes():
                 ref_price = float(seed["price"] or 0.0)
             if not exclude_name:
                 exclude_name = seed["med_name"] or ""
+        else:
+            cat_seed = db.execute("""
+                SELECT salt_composition, mrp, med_name
+                FROM medicine_catalog
+                WHERE LOWER(med_name) LIKE LOWER(?)
+                  AND TRIM(COALESCE(salt_composition, '')) != ''
+                ORDER BY mrp DESC
+                LIMIT 1
+            """, (f"%{query}%",)).fetchone()
+            if cat_seed:
+                salt = (cat_seed["salt_composition"] or "").strip()
+                if ref_price is None:
+                    ref_price = float(cat_seed["mrp"] or 0.0)
+                if not exclude_name:
+                    exclude_name = cat_seed["med_name"] or ""
 
     salts = extract_normalized_salts(query, salt)
     if not salts:
@@ -1235,6 +1366,57 @@ def api_substitutes():
             x["distance_km"] if x["distance_km"] is not None else float("inf"),
         )
     )
+
+    # Append real PMBJP Jan Aushadhi / Generic catalog references sharing the same active salt
+    seen_sub_names = {s["med_name"].lower() for s in substitutes}
+    if excl_lower:
+        seen_sub_names.add(excl_lower)
+    if len(substitutes) < 6:
+        cat_subs = db.execute("""
+            SELECT id, med_name, manufacturer, salt_composition, pack_size, mrp, is_generic, rx_required, source
+            FROM medicine_catalog
+            WHERE LOWER(COALESCE(salt_composition, '')) LIKE LOWER(?)
+              AND mrp > 0
+            ORDER BY is_generic DESC, mrp ASC
+            LIMIT 8
+        """, (f"%{primary_salt}%",)).fetchall()
+        for cs in cat_subs:
+            cname = (cs["med_name"] or "").strip()
+            if not cname or cname.lower() in seen_sub_names:
+                continue
+            price = float(cs["mrp"] or 0.0)
+            if ref_price and ref_price > 0 and price >= ref_price and not cs["is_generic"]:
+                continue
+            seen_sub_names.add(cname.lower())
+            savings_amt = round(ref_price - price, 2) if (ref_price and ref_price > 0 and price < ref_price) else 0.0
+            savings_pct = int(round((savings_amt / ref_price) * 100)) if (ref_price and ref_price > 0 and savings_amt > 0) else 0
+            substitutes.append({
+                "med_id": None,
+                "id": None,
+                "med_name": cname,
+                "salt_composition": cs["salt_composition"] or "",
+                "price": round(price, 2),
+                "available_quantity": 0,
+                "dosage": cs["pack_size"] or "",
+                "shop_id": None,
+                "shop_name": cs["manufacturer"] or cs["source"] or "PMBJP Jan Aushadhi Catalog",
+                "city": "Official MRP Reference",
+                "lat": None,
+                "lng": None,
+                "shop_phone": "",
+                "opening_hours": "",
+                "is_24x7": False,
+                "is_open_now": False,
+                "rx_required": infer_rx_required(cname, cs["salt_composition"], cs["rx_required"]),
+                "distance_km": None,
+                "savings_amount": savings_amt,
+                "savings_pct": savings_pct,
+                "is_catalog_reference": True,
+                "is_generic": bool(cs["is_generic"]),
+            })
+            if len(substitutes) >= 6:
+                break
+
     return jsonify({
         "salt": salt or primary_salt.title(),
         "reference_price": ref_price,
@@ -1665,19 +1847,40 @@ def api_cancel_my_hold(res_id):
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    prefill = {
+        "name": request.args.get("name", "").strip(),
+        "city": request.args.get("city", "").strip(),
+        "lat": request.args.get("lat", "").strip(),
+        "lng": request.args.get("lng", "").strip(),
+        "phone": request.args.get("phone", "").strip(),
+        "opening_hours": request.args.get("hours", "").strip(),
+    }
+
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         password = request.form.get("password", "").strip()
         license_number = request.form.get("license_number", "").strip()
         phone = request.form.get("phone", "").strip()
         opening_hours = request.form.get("opening_hours", "").strip()
+        city = request.form.get("city", "").strip()
+        raw_lat = request.form.get("lat", "").strip()
+        raw_lng = request.form.get("lng", "").strip()
+
+        lat_val, lng_val = None, None
+        if raw_lat and raw_lng:
+            try:
+                p_lat, p_lng = float(raw_lat), float(raw_lng)
+                if -90.0 <= p_lat <= 90.0 and -180.0 <= p_lng <= 180.0:
+                    lat_val, lng_val = p_lat, p_lng
+            except ValueError:
+                pass
 
         raw_license = request.files.get("license_image")
         raw_gst = request.files.get("gst_certificate")
         raw_photo = request.files.get("shop_photo")
 
         if raw_gst and raw_gst.filename and not is_allowed_file(raw_gst.filename):
-            return render_template("register.html", error="GST certificate must be an image or PDF file.")
+            return render_template("register.html", error="GST certificate must be an image or PDF file.", prefill=prefill)
 
         license_file = save_file(raw_license)
         gst_file = save_file(raw_gst)
@@ -1687,30 +1890,31 @@ def register():
             db = get_db()
             existing = db.execute("SELECT id FROM shops WHERE LOWER(name) = LOWER(?)", (name,)).fetchone()
             if existing:
-                return render_template("register.html", error="Shop name already registered.")
+                return render_template("register.html", error="Shop name already registered.", prefill=prefill)
 
             hashed_pw = generate_password_hash(password)
             try:
                 cur = db.cursor()
                 cur.execute("""
                     INSERT INTO shops (
-                        name, password, license_number, license_image, gst_certificate,
+                        name, city, lat, lng, password, license_number, license_image, gst_certificate,
                         shop_photo, phone, opening_hours, status
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
-                """, (name, hashed_pw, license_number, license_file, gst_file, photo_file, phone, opening_hours))
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
+                """, (name, city, lat_val, lng_val, hashed_pw, license_number, license_file, gst_file, photo_file, phone, opening_hours))
                 db.commit()
                 session["shop_id"] = cur.lastrowid
                 return redirect("/dashboard")
             except Exception:
-                return render_template("register.html", error="Shop name already registered.")
+                return render_template("register.html", error="Shop name already registered.", prefill=prefill)
 
         return render_template(
             "register.html",
             error="Please fill in all required fields and upload valid image files (.png, .jpg, .jpeg, .webp).",
+            prefill=prefill,
         )
 
-    return render_template("register.html")
+    return render_template("register.html", prefill=prefill)
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -2078,6 +2282,64 @@ def import_inventory_csv():
 
     db.commit()
     session["csv_notice"] = f"CSV sync complete: {inserted} added, {updated} updated."
+    return redirect("/dashboard")
+
+
+@app.route("/dashboard/import_catalog_pack", methods=["POST"])
+def import_catalog_pack():
+    if "shop_id" not in session:
+        return redirect("/login")
+
+    pack_type = request.form.get("pack_type", "branded").strip().lower()
+    is_gen_pack = pack_type in ("generic", "janaushadhi")
+    pack_limit = max(1, min(50, request.form.get("limit", type=int, default=25)))
+    default_stock = max(1, min(200, request.form.get("default_stock", type=int, default=20)))
+    db = get_db()
+
+    if is_gen_pack:
+        rows = db.execute("""
+            SELECT med_name, salt_composition, pack_size, mrp, rx_required
+            FROM medicine_catalog
+            WHERE is_generic = 1 AND mrp > 0
+            ORDER BY id ASC
+            LIMIT ?
+        """, (pack_limit,)).fetchall()
+    else:
+        rows = db.execute("""
+            SELECT med_name, salt_composition, pack_size, mrp, rx_required
+            FROM medicine_catalog
+            WHERE is_generic = 0 AND mrp > 0
+            ORDER BY id ASC
+            LIMIT ?
+        """, (pack_limit,)).fetchall()
+
+    added = 0
+    for r in rows:
+        existing = db.execute(
+            "SELECT id FROM inventory WHERE shop_id = ? AND LOWER(med_name) = LOWER(?)",
+            (session["shop_id"], r["med_name"]),
+        ).fetchone()
+        if existing:
+            continue
+        db.execute("""
+            INSERT INTO inventory (
+                shop_id, med_name, salt_composition, price, stock_quantity, dosage, rx_required, expiry_date
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, '2028-12-31')
+        """, (
+            session["shop_id"],
+            r["med_name"],
+            r["salt_composition"] or "",
+            round(float(r["mrp"] or 0.0), 2),
+            default_stock,
+            r["pack_size"] or "",
+            1 if infer_rx_required(r["med_name"], r["salt_composition"], r["rx_required"]) else 0,
+        ))
+        added += 1
+
+    db.commit()
+    label = "PMBJP Jan Aushadhi Generic" if is_gen_pack else "Indian Branded"
+    session["csv_notice"] = f"Imported {added} real {label} medicines from the catalog ({default_stock} units each)."
     return redirect("/dashboard")
 
 

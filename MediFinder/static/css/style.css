@@ -1235,3 +1235,74 @@ button,
         bottom: 12px;
     }
 }
+
+/* --- REAL-DATA LAYERS: OPENSTREETMAP LOCAL PHARMACIES & OFFICIAL CATALOG --- */
+.map-legend-dot.osm-dot {
+    background: #d97706;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.24);
+}
+
+.custom-osm-pin {
+    position: relative;
+}
+
+.osm-pin-core {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #d97706;
+    border: 2.5px solid #ffffff;
+    box-shadow: 0 2px 8px rgba(217, 119, 6, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.osm-unverified-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.16rem 0.52rem;
+    border-radius: 999px;
+    background: rgba(217, 119, 6, 0.12);
+    border: 1px solid rgba(217, 119, 6, 0.38);
+    color: #b45309;
+}
+
+[data-theme="dark"] .osm-unverified-badge {
+    background: rgba(251, 191, 36, 0.15);
+    border-color: rgba(251, 191, 36, 0.4);
+    color: #fbbf24;
+}
+
+.catalog-ref-card {
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(3, 105, 161, 0.06));
+    border: 1px solid rgba(15, 118, 110, 0.28);
+}
+
+[data-theme="dark"] .catalog-ref-card {
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.11), rgba(56, 189, 248, 0.08));
+    border-color: rgba(45, 212, 191, 0.3);
+}
+
+.local-osm-shop-card {
+    border-radius: 12px;
+    padding: 0.75rem 0.9rem;
+    background: var(--color-surface-solid);
+    border: 1px dashed rgba(217, 119, 6, 0.4);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.local-osm-shop-card:hover {
+    border-style: solid;
+    border-color: #d97706;
+    box-shadow: 0 4px 12px rgba(217, 119, 6, 0.12);
+}
+

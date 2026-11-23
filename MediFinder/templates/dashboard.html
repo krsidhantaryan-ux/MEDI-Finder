@@ -10,10 +10,10 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/svg+xml" href="/static/icons/icon-192.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=20261123-12" />
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=20261123-13" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=20261123-12">
-    <script src="/static/vendor/leaflet/leaflet.js?v=20261123-12"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=20261123-13">
+    <script src="/static/vendor/leaflet/leaflet.js?v=20261123-13"></script>
 </head>
 <body class="ambient-bg pb-5">
 
@@ -158,9 +158,13 @@
                 <h5 class="fw-bold mb-3 text-success"><i class="bi bi-plus-circle-fill me-2"></i>Add Inventory</h5>
                 <form method="POST">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Medicine Brand Name *</label>
-                        <input type="text" id="add-med-name-input" name="med_name" class="form-control glass-input rounded-3" placeholder="e.g. Dolo 650" required>
+                    <div class="mb-3 position-relative">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold mb-0">Medicine Brand / Generic Name *</label>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill" style="font-size: 0.68rem;">11,400+ Real Catalog</span>
+                        </div>
+                        <input type="text" id="add-med-name-input" name="med_name" class="form-control glass-input rounded-3" placeholder="Type to pick real brand or Jan Aushadhi…" autocomplete="off" required>
+                        <div id="dashboard-catalog-suggestions" class="location-autocomplete-menu glass-card shadow-lg d-none" role="listbox" aria-label="Real Indian medicine catalog suggestions"></div>
                     </div>
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -172,17 +176,17 @@
                         <input type="text" id="add-salt-input" name="salt_composition" class="form-control glass-input rounded-3" placeholder="e.g. Paracetamol">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold">Dosage Form</label>
-                        <input type="text" name="dosage" class="form-control glass-input rounded-3" placeholder="e.g. 650mg / 15 Tablets">
+                        <label class="form-label small fw-bold">Dosage / Pack Size</label>
+                        <input type="text" id="add-dosage-input" name="dosage" class="form-control glass-input rounded-3" placeholder="e.g. strip of 15 tablets">
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
-                            <label class="form-label small fw-bold">Price (₹) *</label>
-                            <input type="number" step="0.01" min="0" name="price" class="form-control glass-input rounded-3" placeholder="e.g. 32.50" required>
+                            <label class="form-label small fw-bold">Price / MRP (₹) *</label>
+                            <input type="number" id="add-price-input" step="0.01" min="0" name="price" class="form-control glass-input rounded-3" placeholder="e.g. 34.27" required>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-bold">Stock Qty</label>
-                            <input type="number" min="0" name="stock_quantity" class="form-control glass-input rounded-3" value="10">
+                            <input type="number" min="0" name="stock_quantity" class="form-control glass-input rounded-3" value="15">
                         </div>
                     </div>
                     <div class="row g-2 align-items-center mb-3">
@@ -200,13 +204,45 @@
                     <button type="submit" class="btn btn-success w-100 fw-semibold rounded-pill shadow-sm"><i class="bi bi-plus-lg me-1"></i> Add Item</button>
                 </form>
 
+                <!-- 1-Click Official Indian Catalog Starter Packs -->
+                <div class="mt-4 pt-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold text-primary"><i class="bi bi-Database-check bi-capsule-pill me-1"></i>1-Click Real Catalog Pack</span>
+                        <span class="badge bg-success-subtle text-success border border-success rounded-pill" style="font-size: 0.68rem;">Official ₹ MRP</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <form action="/dashboard/import_catalog_pack" method="POST" class="flex-grow-1">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="pack_type" value="branded">
+                            <input type="hidden" name="limit" value="25">
+                            <button type="submit" class="btn btn-sm btn-outline-primary rounded-pill w-100 fw-semibold">
+                                <i class="bi bi-plus-circle me-1"></i>+25 Top Branded
+                            </button>
+                        </form>
+                        <form action="/dashboard/import_catalog_pack" method="POST" class="flex-grow-1">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="pack_type" value="generic">
+                            <input type="hidden" name="limit" value="25">
+                            <button type="submit" class="btn btn-sm btn-outline-success rounded-pill w-100 fw-semibold">
+                                <i class="bi bi-shield-plus me-1"></i>+25 Jan Aushadhi
+                            </button>
+                        </form>
+                    </div>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">Populates real Indian Branded or PMBJP Jan Aushadhi generics with active salts, pack sizes &amp; ₹ MRPs.</small>
+                </div>
+
                 <!-- Bulk CSV Sync -->
                 <div class="mt-4 pt-3 border-top">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="small fw-bold text-primary"><i class="bi bi-filetype-csv me-1"></i>Bulk CSV Sync</span>
-                        <a href="/dashboard/export_csv" class="btn btn-sm btn-outline-primary rounded-pill py-1 px-3">
-                            <i class="bi bi-download me-1"></i>Export CSV
-                        </a>
+                        <div class="d-inline-flex gap-1">
+                            <a href="/static/sample_inventory_upload.csv" download class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-2" title="Download ready-to-import dummy CSV">
+                                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Sample CSV
+                            </a>
+                            <a href="/dashboard/export_csv" class="btn btn-sm btn-outline-primary rounded-pill py-1 px-3">
+                                <i class="bi bi-download me-1"></i>Export CSV
+                            </a>
+                        </div>
                     </div>
                     <form action="/dashboard/import_csv" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -441,7 +477,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/main.js?v=20261123-12"></script>
+<script src="/static/js/main.js?v=20261123-13"></script>
 <script>
     var hasSavedShopCoords = {% if shop and shop.lat is not none and shop.lng is not none %}true{% else %}false{% endif %};
     var startLat = {% if shop and shop.lat is not none %}{{ shop.lat }}{% else %}25.5941{% endif %};

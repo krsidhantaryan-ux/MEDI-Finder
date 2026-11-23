@@ -649,6 +649,120 @@ class MediFinderAppTestCase(unittest.TestCase):
         health = self.client.get("/api/health").get_json()
         self.assertEqual(health["status"], "ok")
         self.assertEqual(health["db_engine"], "sqlite")
+        self.assertIn("catalog_count", health)
+
+    def test_real_medicine_catalog_search_substitutes_and_pack_import(self):
+        # Seed real branded + PMBJP Jan Aushadhi rows in medicine_catalog
+        conn = sqlite3.connect(self.db_path)
+        conn.executemany(
+            """
+            INSERT INTO medicine_catalog
+                (med_name, manufacturer, salt_composition, pack_size, mrp, is_generic, rx_required, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("Augmentin 625 Duo Tablet", "GSK", "Amoxycillin (500mg) + Clavulanic Acid (125mg)", "strip of 10 tablets", 223.42, 0, 1, "Indian Medicine Dataset"),
+                ("Dolo 650 Tablet", "Micro Labs Ltd", "Paracetamol (650mg)", "strip of 15 tablets", 34.27, 0, 0, "Indian Medicine Dataset"),
+                ("Paracetamol Tablets IP 500 mg (Jan Aushadhi #23)", "PMBJP (Jan Aushadhi)", "Paracetamol 500 mg", "Pack: 10's", 6.57, 1, 0, "PMBJP Jan Aushadhi"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        # /api/catalog returns real catalog matches and supports generic_only=1
+        cat_all = self.client.get("/api/catalog?q=Paracetamol").get_json()
+        self.assertEqual(len(cat_all), 2)
+        cat_gen = self.client.get("/api/catalog?q=Paracetamol&generic_only=1").get_json()
+        self.assertEqual(len(cat_gen), 1)
+        self.assertTrue(cat_gen[0]["is_generic"])
+
+        # /api/autocomplete blends catalog items even before any partner shop stocks them
+        ac = self.client.get("/api/autocomplete?q=Augmentin").get_json()
+        self.assertTrue(any("Augmentin 625 Duo Tablet" in r["med_name"] for r in ac))
+
+        # /api/substitutes surfaces PMBJP Jan Aushadhi generic reference MRP for the same active salt
+        subs = self.client.get("/api/substitutes?query=Dolo%20650%20Tablet&ref_price=34.27").get_json()
+        self.assertIn("Paracetamol", subs["salt"])
+        self.assertTrue(any(s.get("is_catalog_reference") and s["savings_pct"] > 50 for s in subs["substitutes"]))
+
+        # Verified shop can 1-click import official Branded & Jan Aushadhi catalog starter packs
+        self._register_and_verify_shop("Kankarbagh Medico", "pass1234", "Patna", 25.5980, 85.1610)
+        self.client.post("/login", data={"username": "Kankarbagh Medico", "password": "pass1234"})
+        pack_res = self.client.post(
+            "/dashboard/import_catalog_pack",
+            data={"pack_type": "branded", "limit": "10"},
+            follow_redirects=True,
+        )
+        self.assertEqual(pack_res.status_code, 200)
+        self.assertIn("Imported 2 real Indian Branded", pack_res.get_data(as_text=True))
+
+        gen_pack_res = self.client.post(
+            "/dashboard/import_catalog_pack",
+            data={"pack_type": "generic", "limit": "10"},
+            follow_redirects=True,
+        )
+        self.assertEqual(gen_pack_res.status_code, 200)
+        self.assertIn("Imported 1 real PMBJP Jan Aushadhi", gen_pack_res.get_data(as_text=True))
+
+        # Imported medicines are immediately live in /api/search
+        live_hits = self.client.get("/api/search?query=Augmentin").get_json()
+        self.assertEqual(len(live_hits), 1)
+        self.assertAlmostEqual(live_hits[0]["price"], 223.42, places=2)
+
+    def test_osm_local_pharmacy_claim_prefill_and_map_hooks(self):
+        # Claiming a real OpenStreetMap pharmacy pre-populates /register and saves pinned lat/lng
+        claim_get = self.client.get(
+            "/register?name=Sri+Ram+Medical+Hall&city=Boring+Road,+Patna&lat=25.614800&lng=85.112500&phone=9835099999&hours=8+AM+-+10+PM"
+        )
+        self.assertEqual(claim_get.status_code, 200)
+        html = claim_get.get_data(as_text=True)
+        self.assertIn("Claim &amp; Verify Local Pharmacy", html)
+        self.assertIn("Sri Ram Medical Hall", html)
+        self.assertIn("25.614800", html)
+
+        claim_post = self.client.post(
+            "/register",
+            data={
+                "name": "Sri Ram Medical Hall",
+                "city": "Boring Road, Patna",
+                "lat": "25.614800",
+                "lng": "85.112500",
+                "password": "secret123",
+                "license_number": "DL-OSM-101",
+                "phone": "9835099999",
+                "opening_hours": "8 AM - 10 PM",
+                "license_image": (io.BytesIO(PNG_BYTES), "license.png"),
+                "shop_photo": (io.BytesIO(PNG_BYTES), "front.png"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=False,
+        )
+        self.assertEqual(claim_post.status_code, 302)
+
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        claimed = conn.execute("SELECT * FROM shops WHERE name = ?", ("Sri Ram Medical Hall",)).fetchone()
+        conn.close()
+        self.assertIsNotNone(claimed)
+        self.assertAlmostEqual(claimed["lat"], 25.6148, places=4)
+        self.assertAlmostEqual(claimed["lng"], 85.1125, places=4)
+        self.assertEqual(claimed["city"], "Boring Road, Patna")
+
+        # Verify OpenStreetMap Overpass discovery hooks & untouched live GPS watchPosition coexist
+        home_html = self.client.get("/").get_data(as_text=True)
+        self.assertIn("toggle-osm-layer-btn", home_html)
+        self.assertIn("osm-nearby-count-badge", home_html)
+        with self.client.get("/static/js/main.js") as js_res:
+            js_text = js_res.get_data(as_text=True)
+        for hook in (
+            "discoverNearbyOsmPharmacies",
+            "overpass-api.de/api/interpreter",
+            "buildClaimStoreUrl",
+            "renderCatalogAndLocalOsmCards",
+            "initDashboardCatalogAutocomplete",
+            "watchPosition",
+        ):
+            self.assertIn(hook, js_text)
 
 
 if __name__ == "__main__":
