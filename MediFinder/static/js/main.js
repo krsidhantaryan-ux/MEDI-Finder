@@ -1155,7 +1155,7 @@ function renderRouteOnMap(originLat, originLng, destLat, destLng, shopName, rout
         }).addTo(routeLayer);
 
         L.polyline(pathCoords, {
-            color: '#0d6efd',
+            color: '#0369a1',
             weight: 5,
             opacity: 0.96,
             dashArray: routeData.isFallback ? '8, 8' : null,
@@ -1166,13 +1166,13 @@ function renderRouteOnMap(originLat, originLng, destLat, destLng, shopName, rout
         const firstRoadPt = pathCoords[0];
         const lastRoadPt = pathCoords[pathCoords.length - 1];
         L.polyline([[originLat, originLng], firstRoadPt], {
-            color: '#dc3545',
+            color: '#dc2626',
             weight: 3,
             dashArray: '4, 6',
             opacity: 0.8
         }).addTo(routeLayer);
         L.polyline([lastRoadPt, [destLat, destLng]], {
-            color: '#0d6efd',
+            color: '#0f766e',
             weight: 3,
             dashArray: '4, 6',
             opacity: 0.8
@@ -1512,9 +1512,10 @@ function initSearchPage() {
         executeSearch(query, city);
     });
 
-    // Optional sort & in-stock filter controls
+    // Optional sort, in-stock, & open-now filter controls
     const sortSelect = document.getElementById('sort-select');
     const inStockCheckbox = document.getElementById('in-stock-filter');
+    const openNowCheckbox = document.getElementById('open-now-filter');
     const refreshIfSearched = () => {
         const query = document.getElementById('query-input')?.value.trim() || lastSearchQuery;
         const city = document.getElementById('city-input')?.value.trim() || '';
@@ -1522,8 +1523,12 @@ function initSearchPage() {
     };
     if (sortSelect) sortSelect.addEventListener('change', refreshIfSearched);
     if (inStockCheckbox) inStockCheckbox.addEventListener('change', refreshIfSearched);
+    if (openNowCheckbox) openNowCheckbox.addEventListener('change', refreshIfSearched);
 
-    // Hold & Clinical Reference modal setup
+    // Live Medicine & Salt Autocomplete on #query-input
+    initMedicineAutocomplete();
+
+    // Hold, Clinical Reference, My Holds, & Multi-Med Rx Matcher modal setup
     const holdModalEl = document.getElementById('holdModal');
     if (holdModalEl && window.bootstrap) {
         holdModalInstance = new window.bootstrap.Modal(holdModalEl);
@@ -1536,6 +1541,7 @@ function initSearchPage() {
     if (holdForm) {
         holdForm.addEventListener('submit', submitHoldForm);
     }
+    initMyHoldsAndRxModals();
 
     // Load live Open-Meteo local weather & storage advisory for the map area
     updateLocalEnvironmentBar(defaultLat, defaultLng, 'Patna');
@@ -1543,6 +1549,7 @@ function initSearchPage() {
 
 function executeSearch(query, city, silentToast = false, keepUserView = false) {
     lastSearchQuery = query;
+    hideMedicineAutocomplete();
     if (!keepUserView) {
         clearMapRoute();
     }
@@ -1552,12 +1559,14 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
     const resultsCount = document.getElementById('results-count');
     const sortBy = document.getElementById('sort-select')?.value || 'distance';
     const inStockOnly = document.getElementById('in-stock-filter')?.checked || false;
+    const openNowOnly = document.getElementById('open-now-filter')?.checked || false;
 
     let url = `/api/search?query=${encodeURIComponent(query)}`;
     if (city) url += `&city=${encodeURIComponent(city)}`;
     if (userLat !== null && userLng !== null) url += `&lat=${userLat}&lng=${userLng}`;
     if (sortBy) url += `&sort=${encodeURIComponent(sortBy)}`;
     if (inStockOnly) url += `&in_stock=1`;
+    if (openNowOnly) url += `&open_now=1`;
 
     fetch(url)
         .then(response => {
@@ -1574,14 +1583,16 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
 
             if (results.length === 0) {
                 if (resultsCount) resultsCount.textContent = '0 found';
+                hideSubstitutesPanel();
                 resultsContainer.innerHTML = `
                     <div class="text-center py-5 text-muted">
                         <i class="bi bi-emoji-frown fs-1 text-secondary opacity-50"></i>
                         <p class="mt-2 fw-semibold">No pharmacies found matching "${escapeHtml(query)}".</p>
-                        <small>Try searching generic active ingredients (e.g. Paracetamol) or clear the location filter.</small>
+                        <small>Try searching generic active ingredients (e.g. Paracetamol) or clear the location / open-now filter.</small>
                         <div id="rxnorm-suggestions-box" class="mt-3"></div>
                     </div>
                 `;
+                fetchAndRenderSubstitutes(query, []);
                 fetchRxNormSpellingSuggestions(query).then(suggestions => {
                     const box = document.getElementById('rxnorm-suggestions-box');
                     if (!box || !Array.isArray(suggestions) || suggestions.length === 0) return;
@@ -1601,6 +1612,7 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
             }
 
             if (resultsCount) resultsCount.textContent = `${results.length} found`;
+            fetchAndRenderSubstitutes(query, results);
 
             const bounds = [];
             if (userLat !== null && userLng !== null) {
@@ -1618,6 +1630,9 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                 const salt = item.salt_composition || item.salt || 'Generic Formula';
                 const dosage = item.dosage || 'Standard Dosage';
                 const cityLabel = item.city || 'Location mapped';
+                const rxRequired = Boolean(item.rx_required);
+                const is24x7 = Boolean(item.is_24x7);
+                const isOpenNow = Boolean(item.is_open_now);
                 const hasCoords = item.lat !== null && item.lat !== undefined && item.lng !== null && item.lng !== undefined && item.lat !== '' && item.lng !== '';
                 const distanceBadge = (item.distance_km !== null && item.distance_km !== undefined)
                     ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle me-1"><i class="bi bi-signpost-2 me-1"></i>${escapeHtml(item.distance_km)} km</span>`
@@ -1626,13 +1641,23 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                     ? `<span class="badge bg-success-subtle text-success border border-success me-1"><i class="bi bi-check2-circle me-1"></i>${availStock} available</span>`
                     : `<span class="badge bg-danger-subtle text-danger border border-danger me-1"><i class="bi bi-x-circle me-1"></i>Out of stock</span>`;
                 const holdInfoBadge = activeHolds > 0
-                    ? `<span class="badge bg-warning-subtle text-warning border border-warning"><i class="bi bi-hourglass-split me-1"></i>${activeHolds} held</span>`
+                    ? `<span class="badge bg-warning-subtle text-warning border border-warning me-1"><i class="bi bi-hourglass-split me-1"></i>${activeHolds} held</span>`
                     : '';
+                const rxBadge = rxRequired
+                    ? `<span class="rx-pill-badge" title="Schedule H Prescription Required at Pickup"><i class="bi bi-prescription2"></i>Rx Required</span>`
+                    : '';
+                const openBadge = is24x7
+                    ? `<span class="open-24x7-badge"><i class="bi bi-lightning-charge-fill"></i>24&times;7 Open</span>`
+                    : (isOpenNow ? `<span class="open-24x7-badge"><i class="bi bi-clock-fill"></i>Open Now</span>` : '');
                 const phoneLine = item.shop_phone
                     ? `<small class="text-muted d-block"><i class="bi bi-telephone me-1 text-success"></i><a href="tel:${escapeHtml(item.shop_phone)}" class="text-decoration-none text-reset">${escapeHtml(item.shop_phone)}</a></small>`
                     : '';
                 const hoursLine = item.opening_hours
                     ? `<small class="text-muted d-block"><i class="bi bi-clock me-1 text-info"></i>${escapeHtml(item.opening_hours)}</small>`
+                    : '';
+                const waUrl = buildWhatsAppInquiryUrl(item.shop_phone, shopName, medName);
+                const whatsappBtn = waUrl
+                    ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener" class="btn btn-sm whatsapp-inquiry-btn rounded-pill px-2 card-wa-btn" title="1-Tap WhatsApp Stock &amp; Prescription Inquiry" aria-label="WhatsApp ${escapeHtml(shopName)}"><i class="bi bi-whatsapp"></i></a>`
                     : '';
                 const directionsBtn = hasCoords
                     ? `<button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 card-directions-btn" title="Show route &amp; distance on map"><i class="bi bi-sign-turn-right-fill me-1"></i>Directions</button>`
@@ -1643,28 +1668,34 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                 card.style.animationDelay = `${index * 0.08}s`;
 
                 card.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
                         <div>
-                            <h6 class="fw-bold text-primary mb-0">${escapeHtml(medName)}</h6>
+                            <div class="d-flex flex-wrap align-items-center gap-1">
+                                <h6 class="fw-bold text-primary mb-0">${escapeHtml(medName)}</h6>
+                                ${rxBadge}
+                            </div>
                             <small class="text-muted">${escapeHtml(dosage)}</small>
                         </div>
-                        <span class="fs-5 fw-bold text-success">₹${escapeHtml(price)}</span>
+                        <span class="fs-5 fw-bold text-success flex-shrink-0">₹${escapeHtml(price)}</span>
                     </div>
-                    <div class="mb-2 d-flex flex-wrap gap-1">
+                    <div class="mb-2 d-flex flex-wrap align-items-center gap-1">
                         <span class="badge bg-light text-dark border"><i class="bi bi-capsule me-1"></i>${escapeHtml(salt)}</span>
                         ${stockBadge}
                         ${holdInfoBadge}
                         ${distanceBadge}
+                        ${openBadge}
                     </div>
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top gap-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mt-3 pt-2 border-top gap-2">
                         <div>
                             <div class="fw-semibold text-dark small"><i class="bi bi-shop me-1 text-primary"></i>${escapeHtml(shopName)}</div>
                             <small class="text-muted d-block"><i class="bi bi-geo-alt me-1 text-danger"></i>${escapeHtml(cityLabel)}</small>
                             ${phoneLine}
                             ${hoursLine}
                         </div>
-                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                            <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2 card-info-btn" title="Clinical uses, salt &amp; safety info (RxNorm + openFDA)"><i class="bi bi-info-circle-fill"></i></button>
+                        <div class="d-flex flex-wrap align-items-center gap-1 flex-shrink-0">
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 card-rx-add-btn" title="Add to Multi-Medicine Prescription Matcher">+ Rx</button>
+                            <button type="button" class="btn btn-sm btn-outline-info rounded-pill px-2 card-info-btn" title="Clinical uses, salt &amp; safety info (RxNorm + openFDA)" aria-label="Clinical reference for ${escapeHtml(medName)}"><i class="bi bi-info-circle-fill"></i></button>
+                            ${whatsappBtn}
                             ${directionsBtn}
                             <button type="button" class="btn btn-sm ${availStock > 0 ? 'btn-outline-primary' : 'btn-outline-secondary'} rounded-pill px-3 fw-semibold hold-trigger-btn" ${availStock <= 0 ? 'disabled' : ''}>
                                 <i class="bi bi-handbag me-1"></i> ${availStock > 0 ? 'Hold' : 'Unavailable'}
@@ -1672,6 +1703,19 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                         </div>
                     </div>
                 `;
+
+                const cardRxBtn = card.querySelector('.card-rx-add-btn');
+                if (cardRxBtn) {
+                    cardRxBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        addMedicineToRxList(medName);
+                    });
+                }
+
+                const cardWaBtn = card.querySelector('.card-wa-btn');
+                if (cardWaBtn) {
+                    cardWaBtn.addEventListener('click', (ev) => ev.stopPropagation());
+                }
 
                 const cardInfoBtn = card.querySelector('.card-info-btn');
                 if (cardInfoBtn) {
@@ -1693,7 +1737,7 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                 if (holdBtn && availStock > 0) {
                     holdBtn.addEventListener('click', (ev) => {
                         ev.stopPropagation();
-                        requestHold(medId, medName, availStock, shopName, price);
+                        requestHold(medId, medName, availStock, shopName, price, rxRequired);
                     });
                 }
 
@@ -1725,7 +1769,7 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                         const popupHoldBtn = popupEl.querySelector('.popup-hold-btn');
                         if (popupHoldBtn && availStock > 0) {
                             popupHoldBtn.addEventListener('click', () => {
-                                requestHold(medId, medName, availStock, shopName, price);
+                                requestHold(medId, medName, availStock, shopName, price, rxRequired);
                             });
                         }
                         const popupDirBtn = popupEl.querySelector('.popup-directions-btn');
@@ -1766,7 +1810,16 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
 }
 
 // --- 8. HOLD RESERVATION ENGINE ---
-function requestHold(medId, medName, availableQty = 1, shopName = 'Selected Pharmacy', price = null) {
+function getCsrfHeaders(extra = {}) {
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, extra);
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) {
+        headers['X-CSRF-Token'] = meta.content;
+    }
+    return headers;
+}
+
+function requestHold(medId, medName, availableQty = 1, shopName = 'Selected Pharmacy', price = null, rxRequired = false) {
     if (medId === undefined || medId === null) {
         showToast('Unable to identify medicine listing', 'error');
         return;
@@ -1780,9 +1833,25 @@ function requestHold(medId, medName, availableQty = 1, shopName = 'Selected Phar
         document.getElementById('hold-med-price').textContent = price !== null ? `₹${parseFloat(price).toFixed(2)}` : '';
         document.getElementById('hold-med-avail').textContent = `${availableQty} available`;
 
+        const rxAlert = document.getElementById('hold-rx-alert');
+        if (rxAlert) rxAlert.classList.toggle('d-none', !rxRequired);
+
+        // Reset modal back to input state
+        document.getElementById('hold-form-fields')?.classList.remove('d-none');
+        document.getElementById('hold-confirmation-box')?.classList.add('d-none');
+        document.getElementById('hold-submit-btn')?.classList.remove('d-none');
+        document.getElementById('hold-view-all-btn')?.classList.add('d-none');
+
+        const savedPhone = localStorage.getItem('medfinder_customer_phone') || '';
+        const savedName = localStorage.getItem('medfinder_customer_name') || '';
+        const phoneInput = document.getElementById('hold-phone');
+        const nameInput = document.getElementById('hold-customer-name');
+        if (phoneInput && savedPhone && !phoneInput.value) phoneInput.value = savedPhone;
+        if (nameInput && savedName && !nameInput.value) nameInput.value = savedName;
+
         const qtyInput = document.getElementById('hold-quantity');
         if (qtyInput) {
-            qtyInput.max = Math.max(1, Number(availableQty) || 1);
+            qtyInput.max = Math.min(20, Math.max(1, Number(availableQty) || 1));
             qtyInput.value = 1;
         }
         holdModalInstance.show();
@@ -1812,11 +1881,37 @@ function submitHoldForm(e) {
         return;
     }
 
+    try {
+        localStorage.setItem('medfinder_customer_phone', phone);
+        if (customerName) localStorage.setItem('medfinder_customer_name', customerName);
+    } catch (_) {}
+
     sendReservationRequest(
         { med_id: Number(medId), phone, customer_name: customerName, quantity },
-        () => {
-            if (holdModalInstance) holdModalInstance.hide();
-            document.getElementById('hold-form')?.reset();
+        (body) => {
+            const fieldsEl = document.getElementById('hold-form-fields');
+            const confirmBox = document.getElementById('hold-confirmation-box');
+            const codeEl = document.getElementById('hold-confirmed-code');
+            const msgEl = document.getElementById('hold-confirmed-msg');
+            const warnBox = document.getElementById('hold-safety-warnings');
+
+            if (fieldsEl && confirmBox && codeEl) {
+                fieldsEl.classList.add('d-none');
+                confirmBox.classList.remove('d-none');
+                codeEl.textContent = body.pickup_code || `MF-${1000 + ((body.reservation_id || 1) * 7919) % 9000}`;
+                if (msgEl) msgEl.textContent = body.message || 'Reserved for 2 hours! Show this code at the counter.';
+                document.getElementById('hold-submit-btn')?.classList.add('d-none');
+                document.getElementById('hold-view-all-btn')?.classList.remove('d-none');
+
+                if (warnBox) {
+                    const html = renderSafetyWarningsHtml(body.safety_warnings || []);
+                    warnBox.innerHTML = html;
+                    warnBox.classList.toggle('d-none', !html);
+                }
+            } else if (holdModalInstance) {
+                holdModalInstance.hide();
+            }
+            refreshMyHoldsBadgeCount(phone);
         }
     );
 }
@@ -1827,14 +1922,14 @@ function sendReservationRequest(payload, onSuccess) {
 
     fetch('/api/reserve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getCsrfHeaders(),
         body: JSON.stringify(payload)
     })
         .then(res => res.json().then(body => ({ ok: res.ok, body })))
         .then(({ ok, body }) => {
             if (ok && (body.success || body.status === 'success')) {
                 showToast(body.message || 'Stock successfully held for 2 hours!');
-                if (typeof onSuccess === 'function') onSuccess();
+                if (typeof onSuccess === 'function') onSuccess(body);
                 if (lastSearchQuery) {
                     const cityVal = document.getElementById('city-input')?.value.trim() || '';
                     executeSearch(lastSearchQuery, cityVal, true, true);
@@ -2128,6 +2223,553 @@ function autoFillSaltFromRxNorm() {
     });
 }
 
+// --- 10. AUTOCOMPLETE, GENERIC SUBSTITUTES, MY HOLDS, RX MATCHER, SAFETY & PWA ---
+let medAutocompleteTimer = null;
+let myHoldsModalInstance = null;
+let rxListModalInstance = null;
+let myHoldsCountdownInterval = null;
+let rxSelectedItems = [];
+
+function buildWhatsAppInquiryUrl(rawPhone, shopName, medName) {
+    const digits = String(rawPhone || '').replace(/\D/g, '');
+    if (digits.length < 10) return '';
+    const intl = digits.length === 10 ? `91${digits}` : digits;
+    const msg = `Hello ${shopName || 'Pharmacy'}, checking via MedFinder: is ${medName || 'this medicine'} currently available for counter pickup?`;
+    return `https://wa.me/${intl}?text=${encodeURIComponent(msg)}`;
+}
+
+function renderSafetyWarningsHtml(warnings) {
+    if (!Array.isArray(warnings) || warnings.length === 0) return '';
+    const itemsHtml = warnings
+        .map(w => `
+            <div class="d-flex align-items-start gap-2 mb-1">
+                <i class="bi bi-exclamation-octagon-fill text-danger mt-1 flex-shrink-0"></i>
+                <div>
+                    <span class="badge bg-danger text-white rounded-pill me-1">${escapeHtml(w.severity || 'Alert')}</span>
+                    <span>${escapeHtml(w.message || '')}</span>
+                </div>
+            </div>
+        `)
+        .join('');
+    return `
+        <div class="safety-warning-box">
+            <div class="fw-bold mb-1"><i class="bi bi-shield-exclamation me-1"></i>Clinical Duplicate-Salt / Interaction Check</div>
+            ${itemsHtml}
+        </div>
+    `;
+}
+
+function hideMedicineAutocomplete() {
+    const menu = document.getElementById('query-suggestions');
+    if (menu) {
+        menu.classList.add('d-none');
+        menu.innerHTML = '';
+    }
+}
+
+function initMedicineAutocomplete() {
+    const input = document.getElementById('query-input');
+    const menu = document.getElementById('query-suggestions');
+    if (!input || !menu) return;
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim();
+        if (medAutocompleteTimer) clearTimeout(medAutocompleteTimer);
+        if (q.length < 1) {
+            hideMedicineAutocomplete();
+            return;
+        }
+        medAutocompleteTimer = setTimeout(() => {
+            fetch(`/api/autocomplete?q=${encodeURIComponent(q)}`)
+                .then(r => (r.ok ? r.json() : []))
+                .then(items => {
+                    if (!Array.isArray(items) || items.length === 0 || document.activeElement !== input) {
+                        hideMedicineAutocomplete();
+                        return;
+                    }
+                    menu.innerHTML = '';
+                    items.forEach(sug => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'location-suggestion-item d-flex justify-content-between align-items-center w-100 text-start';
+                        const rxTag = sug.rx_required ? `<span class="rx-pill-badge ms-1">Rx</span>` : '';
+                        const priceTag = sug.min_price > 0 ? `From ₹${Number(sug.min_price).toFixed(2)}` : '';
+                        btn.innerHTML = `
+                            <div class="overflow-hidden me-2">
+                                <div class="fw-bold text-primary small text-truncate">${escapeHtml(sug.med_name)}${rxTag}</div>
+                                <small class="text-muted text-truncate d-block">${escapeHtml(sug.salt_composition || 'Verified Pharmacy Stock')}</small>
+                            </div>
+                            <div class="text-end flex-shrink-0">
+                                <div class="small fw-bold text-success">${escapeHtml(priceTag)}</div>
+                                <small class="text-muted">${Number(sug.in_stock_stores || 0)} store${Number(sug.in_stock_stores || 0) === 1 ? '' : 's'}</small>
+                            </div>
+                        `;
+                        btn.addEventListener('click', () => {
+                            input.value = sug.med_name;
+                            hideMedicineAutocomplete();
+                            const cityVal = document.getElementById('city-input')?.value.trim() || '';
+                            executeSearch(sug.med_name, cityVal);
+                        });
+                        menu.appendChild(btn);
+                    });
+                    menu.classList.remove('d-none');
+                })
+                .catch(() => hideMedicineAutocomplete());
+        }, 160);
+    });
+
+    document.addEventListener('click', (ev) => {
+        if (!menu.contains(ev.target) && ev.target !== input) {
+            hideMedicineAutocomplete();
+        }
+    });
+}
+
+function hideSubstitutesPanel() {
+    const panel = document.getElementById('substitutes-panel');
+    const list = document.getElementById('substitutes-list');
+    if (panel) panel.classList.add('d-none');
+    if (list) list.innerHTML = '';
+}
+
+function fetchAndRenderSubstitutes(query, primaryResults) {
+    const panel = document.getElementById('substitutes-panel');
+    const listEl = document.getElementById('substitutes-list');
+    const saltBadge = document.getElementById('substitutes-salt-badge');
+    if (!panel || !listEl) return;
+
+    const firstHit = Array.isArray(primaryResults) && primaryResults.length > 0 ? primaryResults[0] : null;
+    const salt = firstHit ? (firstHit.salt_composition || '') : '';
+    const refPrice = firstHit ? parseFloat(firstHit.price || 0) : '';
+    const excludeMed = firstHit ? (firstHit.med_name || query) : query;
+
+    let url = `/api/substitutes?query=${encodeURIComponent(query)}&exclude_med_name=${encodeURIComponent(excludeMed)}`;
+    if (salt) url += `&salt=${encodeURIComponent(salt)}`;
+    if (refPrice) url += `&ref_price=${encodeURIComponent(refPrice)}`;
+    if (userLat !== null && userLng !== null) url += `&lat=${userLat}&lng=${userLng}`;
+
+    fetch(url)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+            const subs = data && Array.isArray(data.substitutes) ? data.substitutes : [];
+            if (subs.length === 0) {
+                hideSubstitutesPanel();
+                return;
+            }
+            if (saltBadge && data.salt) {
+                saltBadge.textContent = data.salt;
+            }
+            listEl.innerHTML = '';
+            subs.slice(0, 4).forEach(sub => {
+                const savingsBadge = sub.savings_pct > 0
+                    ? `<span class="savings-pill"><i class="bi bi-arrow-down-short"></i>Save ${sub.savings_pct}% (₹${Number(sub.savings_amount).toFixed(2)})</span>`
+                    : `<span class="badge bg-success-subtle text-success border border-success rounded-pill">Same Active Salt</span>`;
+                const rxBadge = sub.rx_required ? `<span class="rx-pill-badge ms-1">Rx</span>` : '';
+                const distText = (sub.distance_km !== null && sub.distance_km !== undefined) ? ` · ${sub.distance_km} km` : '';
+                const card = document.createElement('div');
+                card.className = 'substitute-card d-flex justify-content-between align-items-center gap-2';
+                card.innerHTML = `
+                    <div class="overflow-hidden">
+                        <div class="d-flex flex-wrap align-items-center gap-1">
+                            <span class="fw-bold text-primary small">${escapeHtml(sub.med_name)}</span>
+                            ${rxBadge}
+                            ${savingsBadge}
+                        </div>
+                        <small class="text-muted d-block text-truncate">
+                            <i class="bi bi-shop me-1"></i>${escapeHtml(sub.shop_name)} (${escapeHtml(sub.city || 'Verified')})${escapeHtml(distText)} · ${sub.available_quantity} in stock
+                        </small>
+                    </div>
+                    <div class="text-end flex-shrink-0">
+                        <div class="fw-bold text-success">₹${Number(sub.price || 0).toFixed(2)}</div>
+                        <div class="d-inline-flex gap-1 mt-1">
+                            ${sub.lat && sub.lng ? `<button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 sub-dir-btn" title="Directions"><i class="bi bi-sign-turn-right-fill"></i></button>` : ''}
+                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill py-0 px-2 fw-semibold sub-hold-btn">Hold</button>
+                        </div>
+                    </div>
+                `;
+                card.querySelector('.sub-dir-btn')?.addEventListener('click', () => {
+                    showDirectionsOnMap(sub.lat, sub.lng, sub.shop_name);
+                });
+                card.querySelector('.sub-hold-btn')?.addEventListener('click', () => {
+                    requestHold(sub.med_id, sub.med_name, sub.available_quantity, sub.shop_name, sub.price, Boolean(sub.rx_required));
+                });
+                listEl.appendChild(card);
+            });
+            panel.classList.remove('d-none');
+        })
+        .catch(() => hideSubstitutesPanel());
+}
+
+function formatCountdownSeconds(secs) {
+    const s = Math.max(0, Number(secs) || 0);
+    if (s <= 0) return 'Expired';
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const rem = s % 60;
+    if (hrs > 0) return `${hrs}h ${String(mins).padStart(2, '0')}m ${String(rem).padStart(2, '0')}s`;
+    return `${mins}m ${String(rem).padStart(2, '0')}s`;
+}
+
+function startMyHoldsCountdownTicker() {
+    if (myHoldsCountdownInterval) clearInterval(myHoldsCountdownInterval);
+    myHoldsCountdownInterval = setInterval(() => {
+        document.querySelectorAll('[data-hold-seconds]').forEach(el => {
+            const next = Math.max(0, (parseInt(el.getAttribute('data-hold-seconds') || '0', 10) || 0) - 1);
+            el.setAttribute('data-hold-seconds', String(next));
+            const label = el.querySelector('.countdown-text');
+            if (label) label.textContent = formatCountdownSeconds(next);
+        });
+    }, 1000);
+}
+
+function refreshMyHoldsBadgeCount(phoneOverride = '') {
+    const badge = document.getElementById('my-holds-count-badge');
+    if (!badge) return;
+    const phone = phoneOverride || localStorage.getItem('medfinder_customer_phone') || '';
+    if (phone.replace(/\D/g, '').length < 7) {
+        badge.classList.add('d-none');
+        return;
+    }
+    fetch(`/api/my-holds?phone=${encodeURIComponent(phone)}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => {
+            const count = data && Number(data.active_count || 0);
+            if (count > 0) {
+                badge.textContent = String(count);
+                badge.classList.remove('d-none');
+            } else {
+                badge.classList.add('d-none');
+            }
+        })
+        .catch(() => {});
+}
+
+function openMyHoldsModal() {
+    const modalEl = document.getElementById('myHoldsModal');
+    if (!modalEl || !window.bootstrap) return;
+    if (!myHoldsModalInstance) {
+        myHoldsModalInstance = new window.bootstrap.Modal(modalEl);
+    }
+    const phoneInput = document.getElementById('my-holds-phone-input');
+    const savedPhone = localStorage.getItem('medfinder_customer_phone') || '';
+    if (phoneInput && savedPhone && !phoneInput.value) {
+        phoneInput.value = savedPhone;
+    }
+    myHoldsModalInstance.show();
+    if (phoneInput && phoneInput.value.trim()) {
+        loadMyHolds(phoneInput.value.trim());
+    }
+}
+
+function switchHoldToMyHolds() {
+    if (holdModalInstance) holdModalInstance.hide();
+    setTimeout(() => openMyHoldsModal(), 220);
+}
+
+function loadMyHolds(phone) {
+    const container = document.getElementById('my-holds-results');
+    const safetyBanner = document.getElementById('my-holds-safety-banner');
+    if (!container) return;
+
+    try { localStorage.setItem('medfinder_customer_phone', phone); } catch (_) {}
+    container.innerHTML = `<div class="text-center py-4 text-muted small">Loading active holds…</div>`;
+
+    fetch(`/api/my-holds?phone=${encodeURIComponent(phone)}`)
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            if (!ok || !body.success) {
+                container.innerHTML = `<div class="alert alert-warning rounded-3 small mb-0">${escapeHtml(body.error || 'Could not look up holds.')}</div>`;
+                return;
+            }
+            refreshMyHoldsBadgeCount(phone);
+            if (safetyBanner) {
+                const warnHtml = renderSafetyWarningsHtml(body.safety_warnings || []);
+                safetyBanner.innerHTML = warnHtml;
+                safetyBanner.classList.toggle('d-none', !warnHtml);
+            }
+
+            const holds = body.holds || [];
+            if (holds.length === 0) {
+                container.innerHTML = `<div class="text-center py-4 text-muted small">No holds found for <strong>${escapeHtml(phone)}</strong>.</div>`;
+                return;
+            }
+
+            container.innerHTML = '';
+            holds.forEach(h => {
+                const isPending = h.status === 'Pending';
+                const rxBadge = h.rx_required ? `<span class="rx-pill-badge ms-1">Rx Required</span>` : '';
+                const waUrl = buildWhatsAppInquiryUrl(h.shop_phone, h.shop_name, `${h.med_name} (Hold Code ${h.pickup_code})`);
+                const card = document.createElement('div');
+                card.className = 'hold-item-card';
+                card.innerHTML = `
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                <span class="pickup-code-pill">${escapeHtml(h.pickup_code)}</span>
+                                <span class="fw-bold text-primary">${escapeHtml(h.med_name)} &times; ${h.quantity}</span>
+                                ${rxBadge}
+                            </div>
+                            <small class="text-muted d-block"><i class="bi bi-shop me-1"></i>${escapeHtml(h.shop_name)} (${escapeHtml(h.city || 'Verified')}) · Total ₹${Number(h.total_price || 0).toFixed(2)}</small>
+                        </div>
+                        <div class="text-end">
+                            ${isPending
+                                ? `<span class="countdown-pill" data-hold-seconds="${h.seconds_remaining}"><i class="bi bi-stopwatch"></i><span class="countdown-text">${formatCountdownSeconds(h.seconds_remaining)}</span></span>`
+                                : `<span class="badge bg-secondary rounded-pill">${escapeHtml(h.status)}</span>`}
+                        </div>
+                    </div>
+                    ${isPending ? `
+                    <div class="d-flex flex-wrap justify-content-end gap-1 mt-2 pt-2 border-top">
+                        ${waUrl ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener" class="btn btn-sm whatsapp-inquiry-btn rounded-pill px-3"><i class="bi bi-whatsapp me-1"></i>WhatsApp Store</a>` : ''}
+                        ${h.lat && h.lng ? `<button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 hold-dir-btn"><i class="bi bi-sign-turn-right-fill me-1"></i>Directions</button>` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 hold-cancel-btn"><i class="bi bi-x-circle me-1"></i>Cancel Hold</button>
+                    </div>` : ''}
+                `;
+                card.querySelector('.hold-dir-btn')?.addEventListener('click', () => {
+                    myHoldsModalInstance?.hide();
+                    showDirectionsOnMap(h.lat, h.lng, h.shop_name);
+                });
+                card.querySelector('.hold-cancel-btn')?.addEventListener('click', () => {
+                    cancelMyHold(h.reservation_id, phone);
+                });
+                container.appendChild(card);
+            });
+
+            startMyHoldsCountdownTicker();
+        })
+        .catch(() => {
+            container.innerHTML = `<div class="alert alert-danger rounded-3 small mb-0">Network error loading holds.</div>`;
+        });
+}
+
+function cancelMyHold(resId, phone) {
+    fetch(`/api/my-holds/${encodeURIComponent(resId)}/cancel`, {
+        method: 'POST',
+        headers: getCsrfHeaders(),
+        body: JSON.stringify({ phone })
+    })
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            if (ok && body.success) {
+                showToast(body.message || 'Hold cancelled');
+                loadMyHolds(phone);
+                if (lastSearchQuery) {
+                    const cityVal = document.getElementById('city-input')?.value.trim() || '';
+                    executeSearch(lastSearchQuery, cityVal, true, true);
+                }
+            } else {
+                showToast(body.error || 'Could not cancel hold', 'error');
+            }
+        })
+        .catch(() => showToast('Network error cancelling hold', 'error'));
+}
+
+function updateRxBadgeCount() {
+    const badge = document.getElementById('rx-list-count-badge');
+    if (!badge) return;
+    if (rxSelectedItems.length > 0) {
+        badge.textContent = String(rxSelectedItems.length);
+        badge.classList.remove('d-none');
+    } else {
+        badge.classList.add('d-none');
+    }
+}
+
+function renderRxPills() {
+    const wrap = document.getElementById('rx-selected-pills');
+    updateRxBadgeCount();
+    if (!wrap) return;
+    if (rxSelectedItems.length === 0) {
+        wrap.innerHTML = `<span class="small text-muted">No medicines added yet. Add 2+ medicines to find your best single-stop pharmacy.</span>`;
+        return;
+    }
+    wrap.innerHTML = '';
+    rxSelectedItems.forEach((name, idx) => {
+        const pill = document.createElement('span');
+        pill.className = 'rx-pill-item';
+        pill.innerHTML = `
+            <i class="bi bi-capsule"></i>
+            <span>${escapeHtml(name)}</span>
+            <button type="button" class="btn-close" style="font-size: 0.6rem;" aria-label="Remove ${escapeHtml(name)}"></button>
+        `;
+        pill.querySelector('button')?.addEventListener('click', () => {
+            rxSelectedItems.splice(idx, 1);
+            saveRxListState();
+            renderRxPills();
+            if (rxSelectedItems.length > 0) runPrescriptionMatch();
+            else {
+                const safetyEl = document.getElementById('rx-safety-panel');
+                if (safetyEl) { safetyEl.classList.add('d-none'); safetyEl.innerHTML = ''; }
+            }
+        });
+        wrap.appendChild(pill);
+    });
+}
+
+function saveRxListState() {
+    try { localStorage.setItem('medfinder_rx_list', JSON.stringify(rxSelectedItems)); } catch (_) {}
+}
+
+function addMedicineToRxList(rawName) {
+    const clean = String(rawName || '').trim();
+    if (!clean) return;
+    if (!rxSelectedItems.some(x => x.toLowerCase() === clean.toLowerCase())) {
+        rxSelectedItems.push(clean);
+        saveRxListState();
+        showToast(`Added "${clean}" to Rx Matcher (${rxSelectedItems.length} item${rxSelectedItems.length === 1 ? '' : 's'})`);
+    }
+    renderRxPills();
+    const modalEl = document.getElementById('rxListModal');
+    if (modalEl && modalEl.classList.contains('show')) {
+        runPrescriptionMatch();
+    }
+}
+
+function openRxListModal() {
+    const modalEl = document.getElementById('rxListModal');
+    if (!modalEl || !window.bootstrap) return;
+    if (!rxListModalInstance) {
+        rxListModalInstance = new window.bootstrap.Modal(modalEl);
+    }
+    renderRxPills();
+    rxListModalInstance.show();
+    if (rxSelectedItems.length > 0) {
+        runPrescriptionMatch();
+    }
+}
+
+function runPrescriptionMatch() {
+    const out = document.getElementById('rx-match-results');
+    const safetyPanel = document.getElementById('rx-safety-panel');
+    if (!out) return;
+
+    if (rxSelectedItems.length === 0) {
+        out.innerHTML = `<div class="text-center py-4 text-muted small">Add at least one medicine above to compare pharmacies.</div>`;
+        return;
+    }
+
+    out.innerHTML = `<div class="text-center py-4 text-muted small">Ranking verified pharmacies &amp; checking clinical interactions…</div>`;
+    fetch('/api/prescription-match', {
+        method: 'POST',
+        headers: getCsrfHeaders(),
+        body: JSON.stringify({
+            items: rxSelectedItems,
+            lat: userLat,
+            lng: userLng
+        })
+    })
+        .then(r => r.json().then(body => ({ ok: r.ok, body })))
+        .then(({ ok, body }) => {
+            if (!ok || !body.success) {
+                out.innerHTML = `<div class="alert alert-warning rounded-3 small mb-0">${escapeHtml(body.error || 'Could not match prescription.')}</div>`;
+                return;
+            }
+            if (safetyPanel) {
+                const warnHtml = renderSafetyWarningsHtml(body.safety_warnings || []);
+                safetyPanel.innerHTML = warnHtml;
+                safetyPanel.classList.toggle('d-none', !warnHtml);
+            }
+
+            const shops = body.pharmacies || [];
+            if (shops.length === 0) {
+                out.innerHTML = `<div class="text-center py-4 text-muted small">No verified pharmacies currently stock these medicines.</div>`;
+                return;
+            }
+
+            out.innerHTML = '';
+            shops.forEach((shop, idx) => {
+                const coverageBadge = shop.complete_match
+                    ? `<span class="badge bg-success text-white rounded-pill"><i class="bi bi-check2-all me-1"></i>All ${shop.matched_count}/${shop.requested_count} in stock</span>`
+                    : `<span class="badge bg-warning text-dark rounded-pill">${shop.matched_count}/${shop.requested_count} in stock</span>`;
+                const openTag = shop.is_24x7
+                    ? `<span class="open-24x7-badge ms-1">24&times;7</span>`
+                    : (shop.is_open_now ? `<span class="open-24x7-badge ms-1">Open</span>` : '');
+                const distStr = (shop.distance_km !== null && shop.distance_km !== undefined) ? ` · ${shop.distance_km} km` : '';
+                const matchedLines = (shop.matched_items || [])
+                    .map(m => `<span class="badge bg-light text-dark border me-1 mb-1">${escapeHtml(m.med_name)} (₹${Number(m.price).toFixed(2)})</span>`)
+                    .join('');
+                const missingLine = (shop.missing_items && shop.missing_items.length > 0)
+                    ? `<div class="small text-danger mt-1">Missing: ${escapeHtml(shop.missing_items.join(', '))}</div>`
+                    : '';
+                const waUrl = buildWhatsAppInquiryUrl(shop.shop_phone, shop.shop_name, rxSelectedItems.join(', '));
+
+                const card = document.createElement('div');
+                card.className = 'rx-shop-rank-card';
+                card.innerHTML = `
+                    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                        <div>
+                            <div class="d-flex flex-wrap align-items-center gap-1">
+                                <span class="badge bg-primary rounded-pill">#${idx + 1}</span>
+                                <span class="fw-bold text-primary">${escapeHtml(shop.shop_name)}</span>
+                                ${coverageBadge}
+                                ${openTag}
+                            </div>
+                            <small class="text-muted">${escapeHtml(shop.city || 'Verified')}${escapeHtml(distStr)}${shop.opening_hours ? ` · ${escapeHtml(shop.opening_hours)}` : ''}</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold text-success fs-6">₹${Number(shop.total_price || 0).toFixed(2)}</div>
+                            <small class="text-muted">Est. Basket</small>
+                        </div>
+                    </div>
+                    <div class="mb-2">${matchedLines}${missingLine}</div>
+                    <div class="d-flex justify-content-end gap-1">
+                        ${waUrl ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener" class="btn btn-sm whatsapp-inquiry-btn rounded-pill px-3"><i class="bi bi-whatsapp me-1"></i>WhatsApp Rx</a>` : ''}
+                        ${shop.lat && shop.lng ? `<button type="button" class="btn btn-sm btn-primary rounded-pill px-3 rx-dir-btn"><i class="bi bi-sign-turn-right-fill me-1"></i>Route on Map</button>` : ''}
+                    </div>
+                `;
+                card.querySelector('.rx-dir-btn')?.addEventListener('click', () => {
+                    rxListModalInstance?.hide();
+                    showDirectionsOnMap(shop.lat, shop.lng, shop.shop_name);
+                });
+                out.appendChild(card);
+            });
+        })
+        .catch(() => {
+            out.innerHTML = `<div class="alert alert-danger rounded-3 small mb-0">Failed to run prescription match.</div>`;
+        });
+}
+
+function initMyHoldsAndRxModals() {
+    try {
+        const savedRx = JSON.parse(localStorage.getItem('medfinder_rx_list') || '[]');
+        if (Array.isArray(savedRx)) rxSelectedItems = savedRx.slice(0, 15);
+    } catch (_) {
+        rxSelectedItems = [];
+    }
+    updateRxBadgeCount();
+    refreshMyHoldsBadgeCount();
+
+    const lookupForm = document.getElementById('my-holds-lookup-form');
+    if (lookupForm) {
+        lookupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const phone = document.getElementById('my-holds-phone-input')?.value.trim() || '';
+            if (phone) loadMyHolds(phone);
+        });
+    }
+
+    const rxForm = document.getElementById('rx-add-item-form');
+    if (rxForm) {
+        rxForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const inp = document.getElementById('rx-item-input');
+            if (inp && inp.value.trim()) {
+                inp.value.split(',').forEach(part => {
+                    if (part.trim()) addMedicineToRxList(part.trim());
+                });
+                inp.value = '';
+            }
+        });
+    }
+}
+
+function registerPwaServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+    }
+}
+
 // Global Initialization
 let mediFinderBooted = false;
 function bootMediFinder() {
@@ -2135,6 +2777,7 @@ function bootMediFinder() {
     mediFinderBooted = true;
     initTheme();
     initSearchPage();
+    registerPwaServiceWorker();
 }
 
 if (document.readyState === 'loading') {

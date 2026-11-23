@@ -4,74 +4,109 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>MedFinder - Modern Pharmacy & Medicine Locator</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon-192.svg">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=20261123-9" />
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=20261123-12" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=20261123-9">
+    <link rel="stylesheet" href="/static/css/style.css?v=20261123-12">
 </head>
 <body class="ambient-bg">
 
 <nav class="navbar navbar-expand-lg glass-nav sticky-top shadow-sm">
     <div class="container">
-        <a class="navbar-brand fw-bold fs-4 text-primary" href="/"><i class="bi bi-capsule-pill me-2"></i>MedFinder</a>
-        <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-sm glass-card px-3 rounded-pill" onclick="toggleTheme()" title="Toggle Theme">
-                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
+        <a class="navbar-brand fw-bold fs-4 text-primary d-inline-flex align-items-center gap-2" href="/">
+            <span class="brand-mark-badge" aria-hidden="true"><i class="bi bi-capsule-pill fs-5"></i></span>
+            <span>MedFinder</span>
+        </a>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" id="rx-list-nav-btn" class="btn btn-sm btn-outline-primary nav-action-btn px-3 rounded-pill fw-semibold" onclick="openRxListModal()" title="Multi-Medicine Prescription Matcher & Safety Checker">
+                <i class="bi bi-clipboard2-pulse" aria-hidden="true"></i>
+                <span>Rx Matcher</span>
+                <span id="rx-list-count-badge" class="badge bg-primary text-white rounded-pill ms-1 d-none">0</span>
             </button>
-            <a href="/login" class="btn btn-outline-primary btn-sm px-3 rounded-pill"><i class="bi bi-shop me-1"></i> Pharmacy Portal</a>
-            <a href="/admin" class="btn btn-primary text-white btn-sm px-3 rounded-pill fw-semibold"><i class="bi bi-shield-lock me-1"></i> Admin</a>
+            <button type="button" id="my-holds-nav-btn" class="btn btn-sm btn-outline-primary nav-action-btn px-3 rounded-pill fw-semibold" onclick="openMyHoldsModal()" title="View your active 2-hour pharmacy holds & pickup codes">
+                <i class="bi bi-bag-check" aria-hidden="true"></i>
+                <span>My Holds</span>
+                <span id="my-holds-count-badge" class="badge bg-success text-white rounded-pill ms-1 d-none">0</span>
+            </button>
+            <button type="button" class="btn btn-sm glass-card nav-action-btn px-3 rounded-pill" onclick="toggleTheme()" title="Toggle Light or Dark Theme" aria-label="Toggle color theme">
+                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark" aria-hidden="true"></i>
+            </button>
+            <a href="/login" class="btn btn-outline-primary btn-sm nav-action-btn px-3 rounded-pill fw-semibold"><i class="bi bi-shop" aria-hidden="true"></i> <span class="d-none d-sm-inline">Pharmacy Portal</span></a>
+            <a href="/admin" class="btn btn-primary text-white btn-sm nav-action-btn px-3 rounded-pill fw-semibold"><i class="bi bi-shield-lock" aria-hidden="true"></i> <span class="d-none d-sm-inline">Admin</span></a>
         </div>
     </div>
 </nav>
 
-<div class="hero-wrapper text-center text-white mb-4">
+<header class="hero-wrapper text-center text-white mb-4">
     <div class="container position-relative" style="z-index: 2;">
-        <h1 class="display-5 fw-bold mb-2">Find Local Medicine Inventory Real-Time</h1>
-        <p class="lead opacity-90 mb-4">Search by medicine brand name or generic salt composition with live store availability.</p>
+        <div class="mb-3">
+            <span class="hero-kicker-pill">
+                <i class="bi bi-patch-check-fill" aria-hidden="true"></i>
+                <span>Verified Local Pharmacies &middot; Live Stock &amp; 2-Hour Holds</span>
+            </span>
+        </div>
+        <h1 class="display-5 fw-bold mb-2">Find Local Medicine Inventory in Real Time</h1>
+        <p class="lead opacity-90 mb-4 mx-auto" style="max-width: 680px;">Search by medicine brand or active generic salt to compare live ₹ MRP, cheaper generic substitutes, and road distance across verified neighborhood pharmacies.</p>
 
-        <div class="card p-3 glass-card mx-auto text-dark" style="max-width: 850px; border-radius: 20px;">
-            <form id="search-form" class="row g-2">
-                <div class="col-md-5">
+        <div class="card p-3 p-md-4 glass-card search-command-card mx-auto text-dark">
+            <form id="search-form" class="row g-2 align-items-center">
+                <div class="col-md-5 position-relative">
                     <div class="input-group">
-                        <span class="input-group-text border-end-0 rounded-start-pill"><i class="bi bi-search text-primary"></i></span>
-                        <input type="text" id="query-input" class="form-control glass-input border-start-0 rounded-end-pill ps-0" placeholder="Brand or Salt (e.g., Paracetamol)" required>
+                        <span class="input-group-text border-end-0 rounded-start-pill ps-3"><i class="bi bi-search text-primary" aria-hidden="true"></i></span>
+                        <input type="text" id="query-input" class="form-control glass-input border-start-0 rounded-end-pill ps-1" placeholder="Brand or Salt (e.g., Paracetamol)" autocomplete="off" aria-label="Medicine brand or active salt" required>
                     </div>
+                    <div id="query-suggestions" class="location-autocomplete-menu glass-card shadow-lg d-none" role="listbox" aria-label="Medicine and salt suggestions"></div>
                 </div>
                 <div class="col-md-4 position-relative">
                     <div class="input-group">
-                        <span class="input-group-text border-end-0 rounded-start-pill"><i class="bi bi-geo-alt-fill text-danger"></i></span>
-                        <input type="text" id="city-input" class="form-control glass-input border-start-0 ps-0" placeholder="Area, Street, or PIN" autocomplete="off" aria-label="Location search box">
-                        <button type="button" id="detect-location-btn" class="btn btn-outline-secondary glass-input rounded-end-pill px-3" onclick="detectUserLocation()" title="Auto-detect my location">
-                            <i id="detect-location-icon" class="bi bi-crosshair text-primary"></i>
+                        <span class="input-group-text border-end-0 rounded-start-pill ps-3"><i class="bi bi-geo-alt-fill text-danger" aria-hidden="true"></i></span>
+                        <input type="text" id="city-input" class="form-control glass-input border-start-0 ps-1" placeholder="Area, Street, or PIN" autocomplete="off" aria-label="Location, street, or PIN code">
+                        <button type="button" id="detect-location-btn" class="btn btn-outline-secondary glass-input rounded-end-pill px-3" onclick="detectUserLocation()" title="Auto-detect my GPS location" aria-label="Auto-detect my GPS location">
+                            <i id="detect-location-icon" class="bi bi-crosshair text-primary" aria-hidden="true"></i>
                         </button>
                     </div>
                     <div id="location-suggestions" class="location-autocomplete-menu glass-card shadow-lg d-none" role="listbox" aria-label="Location suggestions"></div>
                 </div>
                 <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100 rounded-pill fw-semibold shadow-sm"><i class="bi bi-compass me-1"></i> Search Nearby</button>
+                    <button type="submit" class="btn btn-primary w-100 rounded-pill fw-semibold shadow-sm"><i class="bi bi-compass me-1" aria-hidden="true"></i> Search Nearby</button>
                 </div>
             </form>
 
-            <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-2 pt-1">
-                <small class="text-muted fw-semibold"><i class="bi bi-lightning-charge-fill text-warning"></i> Quick search:</small>
+            <div class="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-3 pt-1">
+                <small class="text-muted fw-semibold"><i class="bi bi-lightning-charge-fill text-warning" aria-hidden="true"></i> Common medicines:</small>
                 <button type="button" class="quick-chip" onclick="quickSearch('Dolo 650')">Dolo 650</button>
                 <button type="button" class="quick-chip" onclick="quickSearch('Paracetamol')">Paracetamol</button>
                 <button type="button" class="quick-chip" onclick="quickSearch('Aspirin')">Aspirin</button>
                 <button type="button" class="quick-chip" onclick="quickSearch('Glycomed')">Glycomed</button>
                 <button type="button" class="quick-chip" onclick="quickSearch('Azithral')">Azithral</button>
                 <button type="button" class="quick-chip" onclick="quickSearch('PCM')">PCM</button>
+                <button type="button" class="quick-chip quick-chip-accent" onclick="openRxListModal()">
+                    <i class="bi bi-clipboard2-plus me-1" aria-hidden="true"></i>Multi-Med Rx Match
+                </button>
             </div>
+        </div>
+
+        <div class="hero-trust-strip" aria-label="Platform highlights">
+            <span class="hero-trust-item"><i class="bi bi-shield-check" aria-hidden="true"></i> Drug-License Verified Stores</span>
+            <span class="hero-trust-item"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Generic Salt Substitutes</span>
+            <span class="hero-trust-item"><i class="bi bi-clock-history" aria-hidden="true"></i> 2-Hour Hold + Pickup Code</span>
+            <span class="hero-trust-item"><i class="bi bi-exclamation-diamond" aria-hidden="true"></i> Clinical Safety &amp; Rx Checks</span>
         </div>
     </div>
 
-    <div class="hero-waves">
+    <div class="hero-waves" aria-hidden="true">
         <svg viewBox="0 0 1200 120" preserveAspectRatio="none">
             <path class="shape-fill wave-path-2" d="M0,0 C150,90 350,-40 500,40 C650,120 900,20 1200,60 L1200,120 L0,120 Z"></path>
             <path class="shape-fill wave-path-1" d="M0,0 C300,90 600,-40 800,50 C1000,120 1100,20 1200,40 L1200,120 L0,120 Z"></path>
         </svg>
     </div>
-</div>
+</header>
 
 <div class="container mb-5">
     <div id="local-env-bar" class="local-env-bar glass-card shadow-sm mb-3 d-none">
@@ -106,9 +141,15 @@
                         <span id="results-count" class="badge bg-primary rounded-pill px-3 py-2">0 found</span>
                     </div>
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 pt-1">
-                        <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" role="switch" id="in-stock-filter">
-                            <label class="form-check-label small text-muted" for="in-stock-filter">In stock only</label>
+                        <div class="d-flex flex-wrap align-items-center gap-3">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" id="in-stock-filter">
+                                <label class="form-check-label small text-muted" for="in-stock-filter">In stock</label>
+                            </div>
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch" id="open-now-filter">
+                                <label class="form-check-label small text-muted" for="open-now-filter">Open / 24&times;7</label>
+                            </div>
                         </div>
                         <select id="sort-select" class="form-select form-select-sm glass-input rounded-pill w-auto px-3" aria-label="Sort search results">
                             <option value="distance">Sort: Nearest</option>
@@ -118,11 +159,30 @@
                     </div>
                 </div>
                 <div class="card-body px-4">
-                    <div id="results-container" class="list-group list-group-flush overflow-auto" style="max-height: 550px;">
+                    <div id="results-container" class="list-group list-group-flush overflow-auto" style="max-height: 500px;">
                         <div class="text-center py-5 text-muted">
                             <i class="bi bi-search fs-1 text-primary opacity-50"></i>
-                            <p class="mt-2">Enter a medicine brand or salt composition above to perform a live search.</p>
+                            <p class="mt-2 mb-3">Enter a medicine brand or salt composition above to perform a live search.</p>
+                            <div class="d-flex flex-wrap justify-content-center gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="openRxListModal()">
+                                    <i class="bi bi-clipboard2-pulse me-1"></i>Match Full Prescription
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="openMyHoldsModal()">
+                                    <i class="bi bi-bag-check me-1"></i>Check My Holds
+                                </button>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Same-Salt Generic Substitutes Strip -->
+                    <div id="substitutes-panel" class="substitutes-panel mt-3 pt-3 border-top d-none">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div class="fw-bold small text-primary">
+                                <i class="bi bi-arrow-left-right me-1"></i>Same-Salt Generic Substitutes
+                            </div>
+                            <span id="substitutes-salt-badge" class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill">Same Salt</span>
+                        </div>
+                        <div id="substitutes-list" class="d-flex flex-column gap-2"></div>
                     </div>
                 </div>
             </div>
@@ -130,6 +190,17 @@
 
         <div class="col-lg-7">
             <div class="card border-0 shadow-sm rounded-4 overflow-hidden h-100 glass-card position-relative">
+                <div class="map-card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div class="fw-bold small text-primary d-inline-flex align-items-center gap-2">
+                        <i class="bi bi-map-fill" aria-hidden="true"></i>
+                        <span>Interactive Pharmacy &amp; Route Map</span>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-3 small text-muted">
+                        <span class="d-inline-flex align-items-center gap-1"><span class="map-legend-dot user-dot" aria-hidden="true"></span> Your Pin</span>
+                        <span class="d-inline-flex align-items-center gap-1"><span class="map-legend-dot shop-dot" aria-hidden="true"></span> Verified Store</span>
+                        <span class="d-inline-flex align-items-center gap-1"><span class="map-legend-dot route-dot" aria-hidden="true"></span> Road Route</span>
+                    </div>
+                </div>
                 <div id="gps-iframe-notice" class="gps-iframe-notice glass-card d-none">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <div class="small text-dark">
@@ -161,11 +232,11 @@
                             </div>
                         </div>
                         <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                            <a id="route-external-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1" title="Open in Google Maps">
-                                <i class="bi bi-box-arrow-up-right"></i>
+                            <a id="route-external-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1" title="Open in Google Maps" aria-label="Open route in Google Maps">
+                                <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
                             </a>
-                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1" onclick="clearMapRoute()" title="Clear route from map">
-                                <i class="bi bi-x-lg"></i>
+                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1" onclick="clearMapRoute()" title="Clear route from map" aria-label="Clear route from map">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
@@ -202,30 +273,146 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="hold-phone" class="form-label small fw-bold">Your Phone Number *</label>
-                        <input type="tel" id="hold-phone" class="form-control glass-input rounded-3" placeholder="e.g. 9876543210" required>
-                        <div class="form-text small">The pharmacy will reserve this stock under your phone number for 2 hours.</div>
+                    <div id="hold-rx-alert" class="rx-schedule-notice mb-3 d-none">
+                        <i class="bi bi-prescription2 me-1" aria-hidden="true"></i>
+                        <strong>Prescription Required (Schedule H):</strong> Please carry a valid doctor's prescription to show the pharmacist at counter pickup.
                     </div>
 
-                    <div class="row g-2">
-                        <div class="col-8">
-                            <label for="hold-customer-name" class="form-label small fw-bold">Your Name (Optional)</label>
-                            <input type="text" id="hold-customer-name" class="form-control glass-input rounded-3" placeholder="e.g. Rahul Kumar">
+                    <div id="hold-form-fields">
+                        <div class="mb-3">
+                            <label for="hold-phone" class="form-label small fw-bold">Your Phone Number *</label>
+                            <input type="tel" id="hold-phone" class="form-control glass-input rounded-3" placeholder="e.g. 9876543210" required>
+                            <div class="form-text small">Used to generate your 4-digit counter pickup code and track your 2-hour hold.</div>
                         </div>
-                        <div class="col-4">
-                            <label for="hold-quantity" class="form-label small fw-bold">Quantity</label>
-                            <input type="number" id="hold-quantity" class="form-control glass-input rounded-3" min="1" value="1" required>
+
+                        <div class="row g-2">
+                            <div class="col-8">
+                                <label for="hold-customer-name" class="form-label small fw-bold">Your Name (Optional)</label>
+                                <input type="text" id="hold-customer-name" class="form-control glass-input rounded-3" placeholder="e.g. Rahul Kumar">
+                            </div>
+                            <div class="col-4">
+                                <label for="hold-quantity" class="form-label small fw-bold">Quantity</label>
+                                <input type="number" id="hold-quantity" class="form-control glass-input rounded-3" min="1" max="20" value="1" required>
+                            </div>
                         </div>
+                    </div>
+
+                    <div id="hold-confirmation-box" class="hold-confirmation-box d-none">
+                        <div class="text-center p-3 rounded-4 mb-2">
+                            <div class="small text-muted fw-semibold text-uppercase">Counter Pickup Code</div>
+                            <div class="pickup-code-hero my-1" id="hold-confirmed-code">MF-0000</div>
+                            <div class="small text-success fw-semibold" id="hold-confirmed-msg">Reserved for 2 hours!</div>
+                        </div>
+                        <div id="hold-safety-warnings" class="d-none"></div>
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" data-bs-dismiss="modal">Close</button>
+                    <button type="button" id="hold-view-all-btn" class="btn btn-outline-primary rounded-pill px-3 fw-semibold d-none" onclick="switchHoldToMyHolds()">
+                        <i class="bi bi-bag-check me-1"></i> View My Holds
+                    </button>
                     <button type="submit" id="hold-submit-btn" class="btn btn-primary rounded-pill px-4 fw-semibold">
                         <i class="bi bi-check2-circle me-1"></i> Confirm 2-Hour Hold
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- My Active Holds Lookup & Countdown Modal -->
+<div class="modal fade" id="myHoldsModal" tabindex="-1" aria-labelledby="myHoldsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-card border-0 p-2">
+            <div class="modal-header border-0 pb-1">
+                <div>
+                    <h5 class="modal-title fw-bold text-primary mb-0" id="myHoldsModalLabel">
+                        <i class="bi bi-bag-check-fill me-2"></i>My Active 2-Hour Holds
+                    </h5>
+                    <small class="text-muted">Check your counter pickup codes, live expiry timers, or release a hold</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <form id="my-holds-lookup-form" class="row g-2 align-items-center mb-3">
+                    <div class="col-sm-8">
+                        <label for="my-holds-phone-input" class="visually-hidden">Phone Number</label>
+                        <div class="input-group">
+                            <span class="input-group-text border-end-0 rounded-start-pill ps-3"><i class="bi bi-telephone-fill text-primary"></i></span>
+                            <input type="tel" id="my-holds-phone-input" class="form-control glass-input border-start-0 rounded-end-pill" placeholder="Enter your phone number (e.g. 9876543210)" required>
+                        </div>
+                    </div>
+                    <div class="col-sm-4">
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill fw-semibold">
+                            <i class="bi bi-search me-1"></i> Find Holds
+                        </button>
+                    </div>
+                </form>
+
+                <div id="my-holds-safety-banner" class="d-none mb-3"></div>
+
+                <div id="my-holds-results" class="d-flex flex-column gap-2" style="max-height: 400px; overflow-y: auto;">
+                    <div class="text-center py-4 text-muted small">
+                        <i class="bi bi-clock-history fs-2 text-primary opacity-50 d-block mb-2"></i>
+                        Enter the phone number used during reservation to view your active pickup codes and countdown timers.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Multi-Medicine Prescription Matcher & Safety Checker Modal -->
+<div class="modal fade" id="rxListModal" tabindex="-1" aria-labelledby="rxListModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content glass-card border-0 p-2">
+            <div class="modal-header border-0 pb-1">
+                <div>
+                    <h5 class="modal-title fw-bold text-primary mb-0" id="rxListModalLabel">
+                        <i class="bi bi-clipboard2-pulse-fill me-2"></i>1-Stop Prescription Matcher &amp; Safety Check
+                    </h5>
+                    <small class="text-muted">Add multiple medicines to find which single nearby pharmacy stocks the most items &amp; check duplicate salts</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <form id="rx-add-item-form" class="row g-2 align-items-center mb-2">
+                    <div class="col-sm-9">
+                        <label for="rx-item-input" class="visually-hidden">Medicine or Salt Name</label>
+                        <input type="text" id="rx-item-input" class="form-control glass-input rounded-pill px-3" placeholder="Type medicine or salt (e.g., Dolo 650, Azithral 500, Aspirin)">
+                    </div>
+                    <div class="col-sm-3">
+                        <button type="submit" class="btn btn-outline-primary w-100 rounded-pill fw-semibold">
+                            <i class="bi bi-plus-lg me-1"></i> Add Item
+                        </button>
+                    </div>
+                </form>
+
+                <div class="d-flex flex-wrap align-items-center gap-1 mb-3">
+                    <span class="small text-muted me-1">Quick add:</span>
+                    <button type="button" class="quick-chip" onclick="addMedicineToRxList('Dolo 650')">+ Dolo 650</button>
+                    <button type="button" class="quick-chip" onclick="addMedicineToRxList('Azithral 500')">+ Azithral 500</button>
+                    <button type="button" class="quick-chip" onclick="addMedicineToRxList('Aspirin 75')">+ Aspirin 75</button>
+                    <button type="button" class="quick-chip" onclick="addMedicineToRxList('PCM 650')">+ PCM 650</button>
+                </div>
+
+                <div id="rx-selected-pills" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+                <div id="rx-safety-panel" class="d-none mb-3"></div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold text-uppercase text-muted">Ranked Nearby Pharmacies</span>
+                    <button type="button" id="rx-run-match-btn" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold" onclick="runPrescriptionMatch()">
+                        <i class="bi bi-lightning-charge me-1"></i> Compare Stores
+                    </button>
+                </div>
+
+                <div id="rx-match-results" class="d-flex flex-column gap-2" style="max-height: 330px; overflow-y: auto;">
+                    <div class="text-center py-4 text-muted small">
+                        Add 2 or more medicines from your prescription above to rank nearby pharmacies by item coverage, total ₹ bill, and distance.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -286,7 +473,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/vendor/leaflet/leaflet.js?v=20261123-9"></script>
-<script src="/static/js/main.js?v=20261123-9"></script>
+<script src="/static/vendor/leaflet/leaflet.js?v=20261123-12"></script>
+<script src="/static/js/main.js?v=20261123-12"></script>
 </body>
 </html>

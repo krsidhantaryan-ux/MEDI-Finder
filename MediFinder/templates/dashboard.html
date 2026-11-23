@@ -4,36 +4,99 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Pharmacy Dashboard - MedFinder</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon-192.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=20261123-9" />
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css?v=20261123-12" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=20261123-9">
-    <script src="/static/vendor/leaflet/leaflet.js?v=20261123-9"></script>
+    <link rel="stylesheet" href="/static/css/style.css?v=20261123-12">
+    <script src="/static/vendor/leaflet/leaflet.js?v=20261123-12"></script>
 </head>
 <body class="ambient-bg pb-5">
 
-<nav class="navbar navbar-expand-lg glass-nav sticky-top mb-4">
+<nav class="navbar navbar-expand-lg glass-nav sticky-top mb-4 shadow-sm">
     <div class="container">
-        <span class="navbar-brand fw-bold text-primary"><i class="bi bi-shop me-2"></i>{% if shop %}{{ shop.name }}{% else %}Shop Dashboard{% endif %}</span>
+        <span class="navbar-brand fw-bold text-primary d-inline-flex align-items-center gap-2">
+            <span class="brand-mark-badge" aria-hidden="true"><i class="bi bi-shop"></i></span>
+            <span>{% if shop %}{{ shop.name }}{% else %}Shop Dashboard{% endif %}</span>
+        </span>
         <div class="d-flex flex-wrap align-items-center gap-2">
-            <button class="btn btn-sm glass-card px-3 rounded-pill me-1" onclick="toggleTheme()" title="Toggle Theme">
-                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
+            <button type="button" class="btn btn-sm glass-card nav-action-btn px-3 rounded-pill me-1" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle color theme">
+                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark" aria-hidden="true"></i>
             </button>
             {% if shop and shop.status == 'Verified' %}
-                <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill"><i class="bi bi-patch-check-fill"></i> Verified</span>
+                <span class="badge bg-success-subtle text-success border border-success px-3 py-2 rounded-pill"><i class="bi bi-patch-check-fill" aria-hidden="true"></i> Verified</span>
             {% elif shop and shop.status == 'Rejected' %}
-                <span class="badge bg-danger-subtle text-danger border border-danger px-3 py-2 rounded-pill"><i class="bi bi-x-circle-fill"></i> Rejected</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger px-3 py-2 rounded-pill"><i class="bi bi-x-circle-fill" aria-hidden="true"></i> Rejected</span>
             {% else %}
-                <span class="badge bg-warning-subtle text-warning border border-warning px-3 py-2 rounded-pill"><i class="bi bi-clock-history"></i> Pending Approval</span>
+                <span class="badge bg-warning-subtle text-warning border border-warning px-3 py-2 rounded-pill"><i class="bi bi-clock-history" aria-hidden="true"></i> Pending Approval</span>
             {% endif %}
-            <a href="/" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-search"></i> Test Search</a>
-            <a href="/logout" class="btn btn-danger btn-sm rounded-pill"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            <a href="/" class="btn btn-outline-primary btn-sm nav-action-btn rounded-pill px-3"><i class="bi bi-search" aria-hidden="true"></i> <span>Test Search</span></a>
+            <a href="/logout" class="btn btn-danger btn-sm nav-action-btn rounded-pill px-3"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> <span>Logout</span></a>
         </div>
     </div>
 </nav>
 
 <div class="container">
+    {% if csv_notice %}
+    <div class="alert alert-success rounded-4 py-2 px-3 d-flex justify-content-between align-items-center shadow-sm mb-3">
+        <span><i class="bi bi-check-circle-fill me-2"></i>{{ csv_notice }}</span>
+        <button type="button" class="btn-close btn-sm" onclick="this.parentElement.remove()" aria-label="Dismiss"></button>
+    </div>
+    {% endif %}
+
+    <!-- Live Incoming Hold Banner (auto-populated by 15s background polling) -->
+    <div id="live-hold-alert" class="alert alert-warning rounded-4 py-2 px-3 d-none justify-content-between align-items-center shadow-sm mb-3">
+        <div>
+            <i class="bi bi-bell-fill me-2"></i>
+            <strong id="live-hold-alert-text">New customer 2-hour hold received!</strong>
+        </div>
+        <a href="/dashboard" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold">Refresh Queue</a>
+    </div>
+
+    <!-- Store KPI Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="stat-metric-card h-100">
+                <span class="stat-metric-icon primary" aria-hidden="true"><i class="bi bi-capsule"></i></span>
+                <div>
+                    <div class="stat-metric-value text-primary" id="kpi-total-skus">{{ kpi.total_skus if kpi else items|length }}</div>
+                    <div class="stat-metric-label">Total SKUs</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-metric-card h-100">
+                <span class="stat-metric-icon warning" aria-hidden="true"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                <div>
+                    <div class="stat-metric-value text-warning" id="kpi-low-stock">{{ kpi.low_stock_count if kpi else 0 }}</div>
+                    <div class="stat-metric-label">Low Stock (&le;5)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-metric-card h-100">
+                <span class="stat-metric-icon success" aria-hidden="true"><i class="bi bi-bag-check-fill"></i></span>
+                <div>
+                    <div class="stat-metric-value text-success" id="kpi-active-holds">{{ kpi.active_holds_count if kpi else 0 }}</div>
+                    <div class="stat-metric-label">Active 2h Holds</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="stat-metric-card h-100">
+                <span class="stat-metric-icon primary" aria-hidden="true"><i class="bi bi-check2-all"></i></span>
+                <div>
+                    <div class="stat-metric-value text-primary" id="kpi-completed">{{ kpi.completed_count if kpi else 0 }}</div>
+                    <div class="stat-metric-label">Picked Up</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
         <!-- Store Location Pinning Card -->
         <div class="col-12">
@@ -55,6 +118,7 @@
                     </div>
                     <div class="col-md-5">
                         <form action="/update_location" method="POST" class="p-3 rounded-4 border bg-white bg-opacity-50 h-100 d-flex flex-column justify-content-between">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <div>
                                 <div class="mb-2">
                                     <label class="form-label small fw-bold mb-1">Store City / Area *</label>
@@ -72,12 +136,12 @@
                                 </div>
                                 <div class="row g-2 mb-3">
                                     <div class="col-6">
-                                        <label class="form-label small fw-bold mb-1">Contact Phone</label>
+                                        <label class="form-label small fw-bold mb-1">Contact Phone / WhatsApp</label>
                                         <input type="tel" name="phone" class="form-control form-control-sm glass-input rounded-3" value="{% if shop %}{{ shop.phone or '' }}{% endif %}" placeholder="e.g. 9876543210">
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small fw-bold mb-1">Opening Hours</label>
-                                        <input type="text" name="opening_hours" class="form-control form-control-sm glass-input rounded-3" value="{% if shop %}{{ shop.opening_hours or '' }}{% endif %}" placeholder="e.g. 8 AM - 10 PM">
+                                        <input type="text" name="opening_hours" class="form-control form-control-sm glass-input rounded-3" value="{% if shop %}{{ shop.opening_hours or '' }}{% endif %}" placeholder="e.g. 24x7 Open or 8 AM - 10 PM">
                                     </div>
                                 </div>
                             </div>
@@ -88,11 +152,12 @@
             </div>
         </div>
 
-        <!-- Add Stock Form -->
+        <!-- Add Stock & Bulk CSV Card -->
         <div class="col-md-4">
             <div class="card glass-card p-4 h-100">
                 <h5 class="fw-bold mb-3 text-success"><i class="bi bi-plus-circle-fill me-2"></i>Add Inventory</h5>
                 <form method="POST">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Medicine Brand Name *</label>
                         <input type="text" id="add-med-name-input" name="med_name" class="form-control glass-input rounded-3" placeholder="e.g. Dolo 650" required>
@@ -108,7 +173,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Dosage Form</label>
-                        <input type="text" name="dosage" class="form-control glass-input rounded-3" placeholder="e.g. 650mg / 10 Strips">
+                        <input type="text" name="dosage" class="form-control glass-input rounded-3" placeholder="e.g. 650mg / 15 Tablets">
                     </div>
                     <div class="row g-2 mb-3">
                         <div class="col-6">
@@ -120,17 +185,50 @@
                             <input type="number" min="0" name="stock_quantity" class="form-control glass-input rounded-3" value="10">
                         </div>
                     </div>
+                    <div class="row g-2 align-items-center mb-3">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold mb-1">Batch Expiry Date</label>
+                            <input type="date" name="expiry_date" class="form-control form-control-sm glass-input rounded-3">
+                        </div>
+                        <div class="col-5 pt-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="rx_required" value="1" id="add-rx-required">
+                                <label class="form-check-label small fw-semibold" for="add-rx-required">Rx Required</label>
+                            </div>
+                        </div>
+                    </div>
                     <button type="submit" class="btn btn-success w-100 fw-semibold rounded-pill shadow-sm"><i class="bi bi-plus-lg me-1"></i> Add Item</button>
                 </form>
+
+                <!-- Bulk CSV Sync -->
+                <div class="mt-4 pt-3 border-top">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="small fw-bold text-primary"><i class="bi bi-filetype-csv me-1"></i>Bulk CSV Sync</span>
+                        <a href="/dashboard/export_csv" class="btn btn-sm btn-outline-primary rounded-pill py-1 px-3">
+                            <i class="bi bi-download me-1"></i>Export CSV
+                        </a>
+                    </div>
+                    <form action="/dashboard/import_csv" method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <input type="file" name="csv_file" accept=".csv,text/csv" class="form-control form-control-sm glass-input rounded-3" required>
+                        <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3 fw-semibold flex-shrink-0">
+                            <i class="bi bi-upload me-1"></i>Import
+                        </button>
+                    </form>
+                    <small class="text-muted d-block mt-1" style="font-size: 0.72rem;">Columns: <code>med_name, salt_composition, dosage, price, stock_quantity, rx_required, expiry_date</code></small>
+                </div>
             </div>
         </div>
 
         <!-- Inventory List & Customer Hold Requests -->
         <div class="col-md-8">
             <div class="card glass-card p-4 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                     <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-box-seam-fill me-2"></i>Current Stock</h5>
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1">{{ items|length }} item{{ '' if items|length == 1 else 's' }}</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="small text-muted"><i class="bi bi-broadcast text-success me-1"></i>Auto-syncing holds every 15s</span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3 py-1">{{ items|length }} item{{ '' if items|length == 1 else 's' }}</span>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-glass align-middle">
@@ -145,34 +243,58 @@
                         </thead>
                         <tbody>
                             {% for item in items %}
-                            <tr>
+                            {% set net_avail = [0, (item.stock_quantity or 0) - (item.active_holds or 0)]|max %}
+                            <tr id="inv-row-{{ item.id }}" class="{{ 'opacity-75' if item.is_expired else '' }}">
                                 <td>
-                                    <div class="fw-semibold text-primary">{{ item.med_name }}</div>
-                                    <small class="text-muted">{{ item.dosage or 'N/A' }}</small>
+                                    <div class="d-flex flex-wrap align-items-center gap-1">
+                                        <span class="fw-semibold text-primary">{{ item.med_name }}</span>
+                                        {% if item.rx_effective %}
+                                            <span class="rx-pill-badge">Rx</span>
+                                        {% endif %}
+                                        {% if item.is_expired %}
+                                            <span class="badge bg-danger text-white rounded-pill">Expired ({{ item.expiry_date }})</span>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted d-block">
+                                        {{ item.dosage or 'N/A' }}
+                                        {% if item.expiry_date and not item.is_expired %}
+                                            &middot; Exp: {{ item.expiry_date }}
+                                        {% endif %}
+                                    </small>
                                 </td>
                                 <td><span class="badge bg-light text-dark border">{{ item.salt_composition or 'N/A' }}</span></td>
                                 <td class="fw-bold">₹{{ "%.2f"|format(item.price or 0.0) }}</td>
                                 <td>
-                                    <span class="badge {{ 'bg-success' if (item.stock_quantity or 0) > 0 else 'bg-secondary' }} rounded-pill px-3 py-2">{{ item.stock_quantity or 0 }} units</span>
-                                    {% if item.active_holds and item.active_holds > 0 %}
-                                        <span class="badge bg-warning-subtle text-warning border border-warning rounded-pill ms-1">{{ item.active_holds }} held</span>
-                                    {% endif %}
+                                    <div class="d-inline-flex align-items-center gap-1 flex-wrap">
+                                        <button type="button" class="stock-stepper-btn" onclick="adjustStockInline({{ item.id }}, -1)" title="Decrease stock by 1" aria-label="Decrease stock for {{ item.med_name }}">&minus;</button>
+                                        <span id="stock-badge-{{ item.id }}" class="badge {{ 'bg-success' if (item.stock_quantity or 0) > 5 else ('bg-warning text-dark' if (item.stock_quantity or 0) > 0 else 'bg-secondary') }} rounded-pill px-3 py-2">{{ item.stock_quantity or 0 }} units</span>
+                                        <button type="button" class="stock-stepper-btn" onclick="adjustStockInline({{ item.id }}, 1)" title="Increase stock by 1" aria-label="Increase stock for {{ item.med_name }}">+</button>
+                                    </div>
+                                    <div class="mt-1 d-flex flex-wrap gap-1">
+                                        {% if item.active_holds and item.active_holds > 0 %}
+                                            <span class="badge bg-warning-subtle text-warning border border-warning rounded-pill">{{ item.active_holds }} held</span>
+                                        {% endif %}
+                                        <span id="low-stock-flag-{{ item.id }}" class="badge bg-danger-subtle text-danger border border-danger rounded-pill {{ '' if net_avail <= 5 else 'd-none' }}">Low stock</span>
+                                    </div>
                                 </td>
                                 <td class="text-end">
                                     <div class="d-inline-flex align-items-center gap-1">
                                         <button
                                             type="button"
                                             class="btn btn-outline-primary btn-sm rounded-circle edit-med-btn"
-                                            title="Edit stock / price"
+                                            title="Edit stock / price / expiry"
                                             data-id="{{ item.id }}"
                                             data-name="{{ item.med_name }}"
                                             data-salt="{{ item.salt_composition or '' }}"
                                             data-dosage="{{ item.dosage or '' }}"
                                             data-price="{{ '%.2f'|format(item.price or 0.0) }}"
-                                            data-stock="{{ item.stock_quantity or 0 }}">
+                                            data-stock="{{ item.stock_quantity or 0 }}"
+                                            data-rx="{{ '1' if item.rx_effective else '0' }}"
+                                            data-expiry="{{ item.expiry_date or '' }}">
                                             <i class="bi bi-pencil"></i>
                                         </button>
                                         <form action="/delete_medicine/{{ item.id }}" method="POST" class="m-0 d-inline" onsubmit="return confirm('Remove medicine?');">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-outline-danger btn-sm rounded-circle" title="Remove medicine"><i class="bi bi-trash"></i></button>
                                         </form>
                                     </div>
@@ -180,7 +302,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="5" class="text-center py-4 text-muted">No inventory added yet.</td>
+                                <td colspan="5" class="text-center py-4 text-muted">No inventory added yet. Add an item on the left or import a CSV file.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -193,6 +315,7 @@
                     <table class="table table-sm table-glass border align-middle mb-0">
                         <thead>
                             <tr>
+                                <th>Pickup Code</th>
                                 <th>Medicine</th>
                                 <th>Customer</th>
                                 <th>Qty</th>
@@ -204,6 +327,9 @@
                         <tbody>
                             {% for r in reservations %}
                             <tr>
+                                <td>
+                                    <span class="pickup-code-pill">{{ r.pickup_code or ('MF-' ~ (1000 + (r.id * 7919) % 9000)) }}</span>
+                                </td>
                                 <td class="fw-semibold">{{ r.med_name }}</td>
                                 <td>
                                     <a href="tel:{{ r.customer_phone }}" class="fw-bold text-primary text-decoration-none">{{ r.customer_phone }}</a>
@@ -228,11 +354,13 @@
                                     {% if r.status == 'Pending' %}
                                     <div class="d-inline-flex gap-1">
                                         <form action="/reservation/{{ r.id }}/complete" method="POST" class="m-0 d-inline">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-success btn-sm rounded-pill px-2 py-0" title="Mark picked up & deduct stock">
                                                 <i class="bi bi-check2"></i> Picked Up
                                             </button>
                                         </form>
                                         <form action="/reservation/{{ r.id }}/cancel" method="POST" class="m-0 d-inline">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-2 py-0" title="Release hold">
                                                 <i class="bi bi-x"></i> Release
                                             </button>
@@ -245,7 +373,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="text-center py-3 text-muted">No customer hold requests yet.</td>
+                                <td colspan="7" class="text-center py-3 text-muted">No customer hold requests yet.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -265,6 +393,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="edit-med-form" method="POST">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="rx_present" value="1">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label small fw-bold">Medicine Brand Name *</label>
@@ -278,7 +408,7 @@
                         <label class="form-label small fw-bold">Dosage Form</label>
                         <input type="text" name="dosage" id="edit-med-dosage" class="form-control glass-input rounded-3">
                     </div>
-                    <div class="row g-2">
+                    <div class="row g-2 mb-3">
                         <div class="col-6">
                             <label class="form-label small fw-bold">Price (₹)</label>
                             <input type="number" step="0.01" min="0" name="price" id="edit-med-price" class="form-control glass-input rounded-3" required>
@@ -286,6 +416,18 @@
                         <div class="col-6">
                             <label class="form-label small fw-bold">Stock Qty</label>
                             <input type="number" min="0" name="stock_quantity" id="edit-med-stock" class="form-control glass-input rounded-3" required>
+                        </div>
+                    </div>
+                    <div class="row g-2 align-items-center">
+                        <div class="col-7">
+                            <label class="form-label small fw-bold mb-1">Batch Expiry Date</label>
+                            <input type="date" name="expiry_date" id="edit-med-expiry" class="form-control form-control-sm glass-input rounded-3">
+                        </div>
+                        <div class="col-5 pt-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="rx_required" value="1" id="edit-med-rx">
+                                <label class="form-check-label small fw-semibold" for="edit-med-rx">Rx Required</label>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -299,7 +441,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/main.js?v=20261123-9"></script>
+<script src="/static/js/main.js?v=20261123-12"></script>
 <script>
     var hasSavedShopCoords = {% if shop and shop.lat is not none and shop.lng is not none %}true{% else %}false{% endif %};
     var startLat = {% if shop and shop.lat is not none %}{{ shop.lat }}{% else %}25.5941{% endif %};
@@ -400,6 +542,92 @@
         useCurrentStoreGps(true);
     }
 
+    // Inline +1 / -1 stock stepper
+    function adjustStockInline(medId, delta) {
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        };
+        if (csrfMeta && csrfMeta.content) {
+            headers['X-CSRF-Token'] = csrfMeta.content;
+        }
+        fetch('/inventory/' + medId + '/adjust_stock', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({ delta: delta })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data || !data.ok) {
+                showToast((data && data.error) || 'Failed to update stock', 'error');
+                return;
+            }
+            var badge = document.getElementById('stock-badge-' + medId);
+            if (badge) {
+                badge.textContent = data.stock_quantity + ' units';
+                badge.className = 'badge rounded-pill px-3 py-2 ' + (
+                    data.stock_quantity > 5 ? 'bg-success' : (data.stock_quantity > 0 ? 'bg-warning text-dark' : 'bg-secondary')
+                );
+            }
+            var lowFlag = document.getElementById('low-stock-flag-' + medId);
+            if (lowFlag) {
+                lowFlag.classList.toggle('d-none', !data.low_stock);
+            }
+            var editBtn = document.querySelector('.edit-med-btn[data-id="' + medId + '"]');
+            if (editBtn) {
+                editBtn.dataset.stock = String(data.stock_quantity);
+            }
+            refreshDashboardSummary(true);
+        })
+        .catch(function() {
+            showToast('Network error updating stock', 'error');
+        });
+    }
+
+    var knownPendingHoldIds = new Set([
+        {% for r in reservations %}{% if r.status == 'Pending' %}{{ r.id }},{% endif %}{% endfor %}
+    ]);
+
+    function refreshDashboardSummary(silent) {
+        fetch('/api/dashboard/summary', { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (!data || !data.authenticated) return;
+                if (data.kpi) {
+                    var elTotal = document.getElementById('kpi-total-skus');
+                    var elLow = document.getElementById('kpi-low-stock');
+                    var elHolds = document.getElementById('kpi-active-holds');
+                    var elComp = document.getElementById('kpi-completed');
+                    if (elTotal) elTotal.textContent = data.kpi.total_skus;
+                    if (elLow) elLow.textContent = data.kpi.low_stock_count;
+                    if (elHolds) elHolds.textContent = data.kpi.active_holds_count;
+                    if (elComp) elComp.textContent = data.kpi.completed_count;
+                }
+                var incoming = (data.pending_holds || []).filter(function(h) {
+                    return !knownPendingHoldIds.has(h.id);
+                });
+                if (incoming.length > 0) {
+                    incoming.forEach(function(h) { knownPendingHoldIds.add(h.id); });
+                    var banner = document.getElementById('live-hold-alert');
+                    var textEl = document.getElementById('live-hold-alert-text');
+                    if (banner && textEl) {
+                        var latest = incoming[0];
+                        textEl.textContent = 'New 2-hour hold (' + latest.pickup_code + '): ' + latest.med_name + ' x' + latest.quantity + ' (' + latest.customer_phone + ')';
+                        banner.classList.remove('d-none');
+                        banner.classList.add('d-flex');
+                    }
+                    if (!silent) {
+                        showToast('New customer hold received! Code: ' + incoming[0].pickup_code);
+                    }
+                }
+            })
+            .catch(function() {});
+    }
+
+    // Background poll every 15 seconds for live customer holds
+    setInterval(function() { refreshDashboardSummary(false); }, 15000);
+
     // Wire Edit Medicine Modal buttons
     document.addEventListener('DOMContentLoaded', function() {
         var modalEl = document.getElementById('editMedModal');
@@ -415,6 +643,8 @@
                 document.getElementById('edit-med-dosage').value = btn.dataset.dosage || '';
                 document.getElementById('edit-med-price').value = btn.dataset.price || '0.00';
                 document.getElementById('edit-med-stock').value = btn.dataset.stock || '0';
+                document.getElementById('edit-med-expiry').value = btn.dataset.expiry || '';
+                document.getElementById('edit-med-rx').checked = (btn.dataset.rx === '1');
                 editModal.show();
             });
         });

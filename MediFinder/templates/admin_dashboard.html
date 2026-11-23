@@ -4,21 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - MedFinder</title>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/icons/icon-192.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=20261123-3">
+    <link rel="stylesheet" href="/static/css/style.css?v=20261123-12">
 </head>
 <body class="ambient-bg pb-5">
 
-<nav class="navbar navbar-expand-lg glass-nav sticky-top mb-4">
+<nav class="navbar navbar-expand-lg glass-nav sticky-top mb-4 shadow-sm">
     <div class="container">
-        <span class="navbar-brand fw-bold text-dark"><i class="bi bi-shield-lock-fill text-primary me-2"></i>Admin Verification Dashboard</span>
+        <span class="navbar-brand fw-bold text-primary d-inline-flex align-items-center gap-2">
+            <span class="brand-mark-badge" aria-hidden="true"><i class="bi bi-shield-lock-fill"></i></span>
+            <span>Admin Verification Dashboard</span>
+        </span>
         <div class="d-flex flex-wrap align-items-center gap-2">
-            <button class="btn btn-sm glass-card px-3 rounded-pill me-1" onclick="toggleTheme()" title="Toggle Theme">
-                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark"></i>
+            <button type="button" class="btn btn-sm glass-card nav-action-btn px-3 rounded-pill me-1" onclick="toggleTheme()" title="Toggle Theme" aria-label="Toggle color theme">
+                <i id="theme-toggle-icon" class="bi bi-moon-stars-fill text-dark" aria-hidden="true"></i>
             </button>
-            <a href="/" class="btn btn-outline-secondary btn-sm rounded-pill"><i class="bi bi-house"></i> Public Site</a>
-            <a href="/admin/logout" class="btn btn-danger btn-sm rounded-pill"><i class="bi bi-box-arrow-right"></i> Logout</a>
+            <a href="/" class="btn btn-outline-primary btn-sm nav-action-btn rounded-pill px-3"><i class="bi bi-house" aria-hidden="true"></i> <span>Public Site</span></a>
+            <a href="/admin/logout" class="btn btn-danger btn-sm nav-action-btn rounded-pill px-3"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> <span>Logout</span></a>
         </div>
     </div>
 </nav>
@@ -27,21 +32,36 @@
     <!-- OVERVIEW COUNTS -->
     <div class="row g-3 mb-4">
         <div class="col-md-4">
-            <div class="card glass-card p-3 text-center">
-                <small class="text-muted fw-semibold">Pending Approval</small>
-                <div class="fs-3 fw-bold text-warning">{{ pending|length }}</div>
+            <div class="card glass-card kpi-stat-card kpi-warning p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted fw-semibold d-block">Pending Approval</small>
+                        <div class="fs-3 fw-bold text-warning tabular-nums">{{ pending|length }}</div>
+                    </div>
+                    <i class="bi bi-clock-history fs-2 text-warning opacity-50" aria-hidden="true"></i>
+                </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card glass-card p-3 text-center">
-                <small class="text-muted fw-semibold">Verified Pharmacies</small>
-                <div class="fs-3 fw-bold text-success">{{ verified|length }}</div>
+            <div class="card glass-card kpi-stat-card kpi-success p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted fw-semibold d-block">Verified Pharmacies</small>
+                        <div class="fs-3 fw-bold text-success tabular-nums">{{ verified|length }}</div>
+                    </div>
+                    <i class="bi bi-patch-check-fill fs-2 text-success opacity-50" aria-hidden="true"></i>
+                </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card glass-card p-3 text-center">
-                <small class="text-muted fw-semibold">Rejected Requests</small>
-                <div class="fs-3 fw-bold text-danger">{{ rejected|length }}</div>
+            <div class="card glass-card kpi-stat-card kpi-danger p-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted fw-semibold d-block">Rejected Requests</small>
+                        <div class="fs-3 fw-bold text-danger tabular-nums">{{ rejected|length }}</div>
+                    </div>
+                    <i class="bi bi-x-circle-fill fs-2 text-danger opacity-50" aria-hidden="true"></i>
+                </div>
             </div>
         </div>
     </div>
@@ -99,9 +119,11 @@
                         <td>{{ render_docs(shop) }}</td>
                         <td class="text-end">
                             <form action="/approve/{{ shop.id }}" method="POST" class="d-inline m-0">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-success btn-sm rounded-pill px-3 me-1"><i class="bi bi-check-lg"></i> Approve</button>
                             </form>
                             <form action="/reject/{{ shop.id }}" method="POST" class="d-inline m-0">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-danger btn-sm rounded-pill px-3"><i class="bi bi-x-lg"></i> Reject</button>
                             </form>
                         </td>
@@ -144,9 +166,11 @@
                         <td><span class="badge bg-success rounded-pill px-3 py-2"><i class="bi bi-check-circle me-1"></i> Verified</span></td>
                         <td class="text-end">
                             <form action="/pending/{{ shop.id }}" method="POST" class="d-inline m-0">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-outline-warning btn-sm rounded-pill px-2" title="Move back to Pending">Pending</button>
                             </form>
                             <form action="/reject/{{ shop.id }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Revoke verification for this pharmacy?');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-outline-danger btn-sm rounded-pill px-2" title="Suspend / Reject">Reject</button>
                             </form>
                         </td>
@@ -184,9 +208,11 @@
                         <td><span class="badge bg-danger rounded-pill px-3 py-2">Rejected</span></td>
                         <td class="text-end">
                             <form action="/approve/{{ shop.id }}" method="POST" class="d-inline m-0">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-outline-success btn-sm rounded-pill px-2">Approve</button>
                             </form>
                             <form action="/pending/{{ shop.id }}" method="POST" class="d-inline m-0">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn btn-outline-secondary btn-sm rounded-pill px-2">Pending</button>
                             </form>
                         </td>
@@ -202,6 +228,6 @@
     </div>
 </div>
 
-<script src="/static/js/main.js?v=20261123-3"></script>
+<script src="/static/js/main.js?v=20261123-12"></script>
 </body>
 </html>

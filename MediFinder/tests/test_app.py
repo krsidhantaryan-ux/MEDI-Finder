@@ -373,6 +373,283 @@ class MediFinderAppTestCase(unittest.TestCase):
             self.assertIn(fn_hook, js_text)
         self.assertNotIn("/api/client-location", js_text)
 
+    def test_autocomplete_substitutes_open_now_and_rx_badges(self):
+        # Register & verify two Patna stores: one 24x7 brand store and one generic store
+        self._register_and_verify_shop("Apollo 24x7 Care", "pass1234", "Patna", 25.6000, 85.1200)
+        self.client.post("/login", data={"username": "Apollo 24x7 Care", "password": "pass1234"})
+        self.client.post(
+            "/update_location",
+            data={"city": "Patna", "lat": "25.6000", "lng": "85.1200", "phone": "9835011111", "opening_hours": "24x7 Open"},
+        )
+        self.client.post(
+            "/dashboard",
+            data={
+                "med_name": "Dolo 650",
+                "salt_composition": "Paracetamol",
+                "dosage": "650mg",
+                "price": "34.00",
+                "stock_quantity": "15",
+                "expiry_date": "2028-12-31",
+            },
+        )
+        self.client.post(
+            "/dashboard",
+            data={
+                "med_name": "Azithral 500",
+                "salt_composition": "Azithromycin",
+                "dosage": "500mg",
+                "price": "119.00",
+                "stock_quantity": "8",
+                "rx_required": "1",
+                "expiry_date": "2028-10-31",
+            },
+        )
+        # Expired batch must NOT appear in public search
+        self.client.post(
+            "/dashboard",
+            data={
+                "med_name": "Expired Syrup",
+                "salt_composition": "Paracetamol",
+                "dosage": "100ml",
+                "price": "45.00",
+                "stock_quantity": "10",
+                "expiry_date": "2022-01-01",
+            },
+        )
+        self.client.get("/logout")
+
+        self._register_and_verify_shop("Janaushadhi Generic", "pass1234", "Patna", 25.6050, 85.1300)
+        self.client.post("/login", data={"username": "Janaushadhi Generic", "password": "pass1234"})
+        self.client.post(
+            "/update_location",
+            data={"city": "Patna", "lat": "25.6050", "lng": "85.1300", "phone": "9835022222", "opening_hours": "Closed"},
+        )
+        self.client.post(
+            "/dashboard",
+            data={
+                "med_name": "Paracetamol 650 IP",
+                "salt_composition": "Paracetamol",
+                "dosage": "650mg",
+                "price": "14.50",
+                "stock_quantity": "30",
+                "expiry_date": "2028-12-31",
+            },
+        )
+        self.client.get("/logout")
+
+        # 1) Live autocomplete returns non-expired medicines with store count & min price
+        ac = self.client.get("/api/autocomplete?q=Paracetamol").get_json()
+        ac_names = [x["med_name"] for x in ac]
+        self.assertIn("Dolo 650", ac_names)
+        self.assertIn("Paracetamol 650 IP", ac_names)
+        self.assertNotIn("Expired Syrup", ac_names)
+
+        # 2) Expired batch excluded from public /api/search
+        exp_search = self.client.get("/api/search?query=Expired+Syrup").get_json()
+        self.assertEqual(len(exp_search), 0)
+
+        # 3) Rx badge set on Schedule H antibiotic
+        az_search = self.client.get("/api/search?query=Azithral").get_json()
+        self.assertEqual(len(az_search), 1)
+        self.assertTrue(az_search[0]["rx_required"])
+        self.assertTrue(az_search[0]["is_24x7"])
+
+        # 4) open_now=1 filters out closed store
+        open_res = self.client.get("/api/search?query=Paracetamol&open_now=1").get_json()
+        self.assertEqual(len(open_res), 1)
+        self.assertEqual(open_res[0]["shop_name"], "Apollo 24x7 Care")
+
+        # 5) Generic substitutes return cheaper Paracetamol 650 IP with % savings
+        subs_res = self.client.get(
+            "/api/substitutes?query=Dolo+650&salt=Paracetamol&exclude_med_name=Dolo+650&ref_price=34.0"
+        ).get_json()
+        self.assertGreaterEqual(len(subs_res["substitutes"]), 1)
+        top_sub = subs_res["substitutes"][0]
+        self.assertEqual(top_sub["med_name"], "Paracetamol 650 IP")
+        self.assertGreater(top_sub["savings_pct"], 50)
+
+    def test_my_active_holds_pickup_code_cancellation_and_anti_spam_limit(self):
+        self._register_and_verify_shop("Hold Care Pharmacy", "pass1234", "Patna", 25.5941, 85.1376)
+        self.client.post("/login", data={"username": "Hold Care Pharmacy", "password": "pass1234"})
+        self.client.post(
+            "/update_location",
+            data={"city": "Patna", "lat": "25.5941", "lng": "85.1376", "phone": "9835099999", "opening_hours": "24x7 Open"},
+        )
+        self.client.post(
+            "/dashboard",
+            data={"med_name": "Dolo 650", "salt_composition": "Paracetamol", "price": "33.60", "stock_quantity": "20"},
+        )
+        self.client.post(
+            "/dashboard",
+            data={"med_name": "PCM 650", "salt_composition": "Paracetamol", "price": "29.00", "stock_quantity": "20"},
+        )
+        self.client.get("/logout")
+
+        items = self.client.get("/api/search?query=Paracetamol").get_json()
+        dolo_id = next(x["med_id"] for x in items if x["med_name"] == "Dolo 650")
+        pcm_id = next(x["med_id"] for x in items if x["med_name"] == "PCM 650")
+
+        # Place first hold
+        r1 = self.client.post("/api/reserve", json={"med_id": dolo_id, "phone": "9876543210", "quantity": 2})
+        self.assertEqual(r1.status_code, 200)
+        b1 = r1.get_json()
+        self.assertTrue(b1["pickup_code"].startswith("MF-"))
+
+        # Place second hold on another Paracetamol brand -> triggers duplicate-salt warning!
+        r2 = self.client.post("/api/reserve", json={"med_id": pcm_id, "phone": "+91 98765-43210", "quantity": 1})
+        self.assertEqual(r2.status_code, 200)
+        b2 = r2.get_json()
+        self.assertTrue(any(w["type"] == "duplicate_salt" for w in b2["safety_warnings"]))
+
+        # Lookup via /api/my-holds returns both holds + countdown + duplicate-salt warning
+        my_holds = self.client.get("/api/my-holds?phone=9876543210").get_json()
+        self.assertEqual(my_holds["active_count"], 2)
+        self.assertGreater(my_holds["holds"][0]["seconds_remaining"], 7000)
+
+        # Cancel one hold and confirm available stock returns to 20
+        cancel_res = self.client.post(
+            f"/api/my-holds/{b1['reservation_id']}/cancel",
+            json={"phone": "9876543210"},
+        )
+        self.assertEqual(cancel_res.status_code, 200)
+        refreshed = self.client.get("/api/search?query=Dolo+650").get_json()
+        self.assertEqual(refreshed[0]["available_quantity"], 20)
+
+        # Anti-spam cap blocks excessive simultaneous holds
+        medifinder_app.app.config["MAX_ACTIVE_HOLDS_PER_PHONE"] = 2
+        try:
+            self.client.post("/api/reserve", json={"med_id": dolo_id, "phone": "9876543210", "quantity": 1})
+            blocked = self.client.post("/api/reserve", json={"med_id": dolo_id, "phone": "9876543210", "quantity": 1})
+            self.assertEqual(blocked.status_code, 429)
+        finally:
+            medifinder_app.app.config["MAX_ACTIVE_HOLDS_PER_PHONE"] = 5
+
+    def test_multi_medicine_prescription_matcher_and_clinical_safety_checker(self):
+        self._register_and_verify_shop("OneStop Medico", "pass1234", "Patna", 25.5950, 85.1380)
+        self._register_and_verify_shop("Partial Chemist", "pass1234", "Patna", 25.5942, 85.1377)
+
+        self.client.post("/login", data={"username": "OneStop Medico", "password": "pass1234"})
+        for name, salt, price in [
+            ("Dolo 650", "Paracetamol", "33.00"),
+            ("Azithral 500", "Azithromycin", "118.00"),
+            ("Pan 40", "Pantoprazole", "145.00"),
+        ]:
+            self.client.post("/dashboard", data={"med_name": name, "salt_composition": salt, "price": price, "stock_quantity": "12"})
+        self.client.get("/logout")
+
+        self.client.post("/login", data={"username": "Partial Chemist", "password": "pass1234"})
+        self.client.post("/dashboard", data={"med_name": "Dolo 650", "salt_composition": "Paracetamol", "price": "30.00", "stock_quantity": "12"})
+        self.client.get("/logout")
+
+        match_res = self.client.post(
+            "/api/prescription-match",
+            json={"items": ["Dolo 650", "Azithral 500", "Pan 40"], "lat": 25.5941, "lng": 85.1376},
+        )
+        self.assertEqual(match_res.status_code, 200)
+        data = match_res.get_json()
+        self.assertEqual(data["pharmacies"][0]["shop_name"], "OneStop Medico")
+        self.assertTrue(data["pharmacies"][0]["complete_match"])
+        self.assertEqual(data["pharmacies"][0]["matched_count"], 3)
+        self.assertAlmostEqual(data["pharmacies"][0]["total_price"], 296.0, places=2)
+
+        # Clinical safety checker flags Aspirin + Ibuprofen interaction AND duplicate Paracetamol
+        safety_res = self.client.post(
+            "/api/safety-check",
+            json={
+                "items": [
+                    {"med_name": "Ecosprin 75", "salt_composition": "Aspirin"},
+                    {"med_name": "Brufen 400", "salt_composition": "Ibuprofen"},
+                    {"med_name": "Dolo 650", "salt_composition": "Paracetamol"},
+                    {"med_name": "Crocin 650", "salt_composition": "Acetaminophen"},
+                ]
+            },
+        ).get_json()
+        self.assertFalse(safety_res["safe"])
+        types = {w["type"] for w in safety_res["warnings"]}
+        self.assertIn("duplicate_salt", types)
+        self.assertIn("interaction", types)
+
+    def test_dashboard_inline_stepper_csv_import_export_and_live_summary(self):
+        self._register_and_verify_shop("CSV & Stepper Store", "pass1234", "Patna", 25.5941, 85.1376)
+        self.client.post("/login", data={"username": "CSV & Stepper Store", "password": "pass1234"})
+
+        csv_payload = (
+            "med_name,salt_composition,dosage,price,stock_quantity,rx_required,expiry_date\n"
+            "Glycomed 80,Gliclazide,80mg,92.50,6,1,2028-09-30\n"
+            "ORS Pack,Oral Rehydration Salts,21g,22.00,15,0,2028-11-30\n"
+        ).encode("utf-8")
+        imp_res = self.client.post(
+            "/dashboard/import_csv",
+            data={"csv_file": (io.BytesIO(csv_payload), "stock.csv")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertEqual(imp_res.status_code, 200)
+        self.assertIn("CSV sync complete: 2 added", imp_res.get_data(as_text=True))
+
+        # Export CSV
+        exp_res = self.client.get("/dashboard/export_csv")
+        self.assertEqual(exp_res.status_code, 200)
+        self.assertIn("Glycomed 80", exp_res.get_data(as_text=True))
+
+        # Inline stock stepper (-1 brings Glycomed 80 from 6 -> 5, triggering low_stock=True)
+        gly_item = self.client.get("/api/search?query=Glycomed").get_json()[0]
+        step_res = self.client.post(
+            f"/inventory/{gly_item['med_id']}/adjust_stock",
+            json={"delta": -1},
+            headers={"Accept": "application/json"},
+        ).get_json()
+        self.assertTrue(step_res["ok"])
+        self.assertEqual(step_res["stock_quantity"], 5)
+        self.assertTrue(step_res["low_stock"])
+
+        # Live dashboard summary JSON endpoint reflects updated low_stock_count
+        summary = self.client.get("/api/dashboard/summary").get_json()
+        self.assertTrue(summary["authenticated"])
+        self.assertEqual(summary["kpi"]["total_skus"], 2)
+        self.assertEqual(summary["kpi"]["low_stock_count"], 1)
+
+    def test_csrf_cross_origin_protection_pwa_and_postgres_adapter(self):
+        # Cross-origin POST is rejected with 403
+        forged = self.client.post(
+            "/api/reserve",
+            json={"med_id": 1, "phone": "9876543210"},
+            headers={"Origin": "https://evil-attacker.example"},
+        )
+        self.assertEqual(forged.status_code, 403)
+
+        # Mismatched X-CSRF-Token is rejected with 403 once a session CSRF token exists
+        self.client.get("/api/csrf-token")
+        bad_token = self.client.post(
+            "/api/reserve",
+            json={"med_id": 1, "phone": "9876543210"},
+            headers={"X-CSRF-Token": "wrong-token"},
+        )
+        self.assertEqual(bad_token.status_code, 403)
+
+        # PWA endpoints serve manifest, service worker, and SVG icons
+        with self.client.get("/manifest.json") as mf_res:
+            self.assertEqual(mf_res.status_code, 200)
+            self.assertEqual(mf_res.get_json()["short_name"], "MedFinder")
+
+        with self.client.get("/sw.js") as sw_res:
+            self.assertEqual(sw_res.status_code, 200)
+            self.assertIn("Service-Worker-Allowed", sw_res.headers)
+
+        with self.client.get("/static/icons/icon-192.svg") as icon_res:
+            self.assertEqual(icon_res.status_code, 200)
+
+        # PostgreSQL SQL translator & health engine reporting
+        pg_sql = medifinder_app._translate_sql_for_postgres(
+            "UPDATE inventory SET stock_quantity = MAX(0, stock_quantity - ?) WHERE created_at <= datetime('now', '+2 hours')"
+        )
+        self.assertIn("GREATEST(0,", pg_sql)
+        self.assertIn("%s", pg_sql)
+        self.assertIn("INTERVAL '2 hours'", pg_sql)
+        health = self.client.get("/api/health").get_json()
+        self.assertEqual(health["status"], "ok")
+        self.assertEqual(health["db_engine"], "sqlite")
+
 
 if __name__ == "__main__":
     unittest.main()
