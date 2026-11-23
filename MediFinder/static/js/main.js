@@ -4,8 +4,14 @@
 
 let searchMap = null;
 let markersLayer = null;
+let osmLayer = null;
 let routeLayer = null;
 let userLayer = null;
+let osmLayerVisible = true;
+let osmPharmaciesCache = [];
+let verifiedShopCoords = [];
+let lastOsmFetchCoords = null;
+let osmFetchDebounceTimer = null;
 let userMarker = null;
 let userAccuracyCircle = null;
 let userLat = null;
@@ -713,6 +719,169 @@ function createPulsingIcon() {
     });
 }
 
+function createLocalOsmIcon() {
+    return L.divIcon({
+        className: 'custom-osm-pin',
+        html: `<div class="osm-pin-core">+</div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+        popupAnchor: [0, -10]
+    });
+}
+
+function buildClaimStoreUrl(osmShop) {
+    const params = new URLSearchParams();
+    if (osmShop.name) params.set('name', osmShop.name);
+    if (osmShop.area) params.set('city', osmShop.area);
+    if (Number.isFinite(osmShop.lat)) params.set('lat', Number(osmShop.lat).toFixed(6));
+    if (Number.isFinite(osmShop.lng)) params.set('lng', Number(osmShop.lng).toFixed(6));
+    if (osmShop.phone) params.set('phone', osmShop.phone);
+    if (osmShop.opening_hours) params.set('hours', osmShop.opening_hours);
+    return `/register?${params.toString()}`;
+}
+
+function toggleOsmPharmaciesLayer() {
+    osmLayerVisible = !osmLayerVisible;
+    const btn = document.getElementById('toggle-osm-layer-btn');
+    if (btn) {
+        btn.classList.toggle('opacity-50', !osmLayerVisible);
+    }
+    if (!searchMap || !osmLayer) return;
+    if (osmLayerVisible) {
+        osmLayer.addTo(searchMap);
+        renderOsmLayerMarkers();
+    } else {
+        try { searchMap.removeLayer(osmLayer); } catch (_) {}
+    }
+}
+
+function renderOsmLayerMarkers() {
+    if (!osmLayer || typeof osmLayer.clearLayers !== 'function') return;
+    osmLayer.clearLayers();
+    if (!osmLayerVisible || !Array.isArray(osmPharmaciesCache)) return;
+
+    const refLat = userLat !== null ? userLat : (searchMap ? searchMap.getCenter().lat : null);
+    const refLng = userLng !== null ? userLng : (searchMap ? searchMap.getCenter().lng : null);
+
+    osmPharmaciesCache.forEach(osmShop => {
+        if (!Number.isFinite(osmShop.lat) || !Number.isFinite(osmShop.lng)) return;
+        const distKm = (refLat !== null && refLng !== null)
+            ? computeHaversineKm(refLat, refLng, osmShop.lat, osmShop.lng).toFixed(2)
+            : null;
+        const marker = L.marker([osmShop.lat, osmShop.lng], { icon: createLocalOsmIcon() });
+
+        const popupEl = document.createElement('div');
+        popupEl.className = 'p-1 text-dark';
+        popupEl.style.minWidth = '210px';
+        const claimUrl = buildClaimStoreUrl(osmShop);
+        const waUrl = osmShop.phone ? buildWhatsAppInquiryUrl(osmShop.phone, osmShop.name, lastSearchQuery || 'medicine') : '';
+        popupEl.innerHTML = `
+            <div class="mb-1"><span class="osm-unverified-badge"><i class="bi bi-geo-alt-fill"></i>Local Pharmacy (OSM) · Stock Unverified</span></div>
+            <h6 class="fw-bold text-dark mb-1">${escapeHtml(osmShop.name)}</h6>
+            <p class="mb-1 small text-muted"><i class="bi bi-signpost-2 text-warning me-1"></i>${escapeHtml(osmShop.area || 'Neighborhood Medical Store')}${distKm ? ` · ${distKm} km` : ''}</p>
+            ${osmShop.opening_hours ? `<p class="mb-1 small text-muted"><i class="bi bi-clock me-1"></i>${escapeHtml(osmShop.opening_hours)}</p>` : ''}
+            ${osmShop.phone ? `<p class="mb-2 small"><i class="bi bi-telephone text-success me-1"></i><a href="tel:${escapeHtml(osmShop.phone)}" class="text-decoration-none">${escapeHtml(osmShop.phone)}</a></p>` : ''}
+            <div class="d-flex flex-wrap gap-1 mt-2">
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill py-1 px-2 flex-grow-1 osm-popup-dir-btn">
+                    <i class="bi bi-sign-turn-right-fill me-1"></i>Directions
+                </button>
+                ${waUrl ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener" class="btn btn-sm whatsapp-inquiry-btn rounded-pill py-1 px-2" title="WhatsApp Inquiry"><i class="bi bi-whatsapp"></i></a>` : ''}
+                <a href="${escapeHtml(claimUrl)}" class="btn btn-sm btn-warning text-dark rounded-pill py-1 px-2 fw-semibold" title="Pharmacy owner? Claim store &amp; publish live stock">
+                    <i class="bi bi-patch-plus me-1"></i>Claim
+                </a>
+            </div>
+        `;
+        popupEl.querySelector('.osm-popup-dir-btn')?.addEventListener('click', () => {
+            showDirectionsOnMap(osmShop.lat, osmShop.lng, osmShop.name);
+        });
+        marker.bindPopup(popupEl);
+        osmLayer.addLayer(marker);
+    });
+}
+
+function discoverNearbyOsmPharmacies(lat, lng, radiusMeters = 4500) {
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) return Promise.resolve([]);
+
+    if (lastOsmFetchCoords && computeHaversineKm(lastOsmFetchCoords.lat, lastOsmFetchCoords.lng, numLat, numLng) < 0.65 && osmPharmaciesCache.length > 0) {
+        renderOsmLayerMarkers();
+        return Promise.resolve(osmPharmaciesCache);
+    }
+    lastOsmFetchCoords = { lat: numLat, lng: numLng };
+
+    const overpassQuery = `[out:json][timeout:14];(node["amenity"="pharmacy"](around:${radiusMeters},${numLat.toFixed(5)},${numLng.toFixed(5)});way["amenity"="pharmacy"](around:${radiusMeters},${numLat.toFixed(5)},${numLng.toFixed(5)});node["healthcare"="pharmacy"](around:${radiusMeters},${numLat.toFixed(5)},${numLng.toFixed(5)});node["shop"="chemist"](around:${radiusMeters},${numLat.toFixed(5)},${numLng.toFixed(5)}););out center 60;`;
+    const endpoints = [
+        'https://overpass-api.de/api/interpreter',
+        'https://overpass.kumi.systems/api/interpreter'
+    ];
+
+    const badgeEl = document.getElementById('osm-nearby-count-badge');
+
+    const tryOverpass = (idx) => {
+        if (idx >= endpoints.length) return Promise.resolve([]);
+        return fetch(`${endpoints[idx]}?data=${encodeURIComponent(overpassQuery)}`)
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then(data => {
+                const elements = (data && Array.isArray(data.elements)) ? data.elements : [];
+                const parsed = [];
+                const seenKeys = new Set();
+
+                elements.forEach(el => {
+                    const elLat = Number(el.lat ?? (el.center && el.center.lat));
+                    const elLng = Number(el.lon ?? (el.center && el.center.lon));
+                    if (!Number.isFinite(elLat) || !Number.isFinite(elLng)) return;
+
+                    // Deduplicate against verified partner stores within 60 meters
+                    const nearVerified = verifiedShopCoords.some(v => computeHaversineKm(v.lat, v.lng, elLat, elLng) < 0.06);
+                    if (nearVerified) return;
+
+                    const tags = el.tags || {};
+                    const rawName = (tags.name || tags['name:en'] || tags.brand || tags.operator || '').trim();
+                    const displayName = rawName || 'Local Medical & Chemist Store';
+                    const dedupKey = `${displayName.toLowerCase()}_${elLat.toFixed(3)}_${elLng.toFixed(3)}`;
+                    if (seenKeys.has(dedupKey)) return;
+                    seenKeys.add(dedupKey);
+
+                    const areaParts = [
+                        tags['addr:street'],
+                        tags['addr:suburb'] || tags['addr:neighbourhood'],
+                        tags['addr:city'] || userLocationLabel || ''
+                    ].filter(Boolean);
+
+                    parsed.push({
+                        osm_id: `${el.type || 'node'}/${el.id}`,
+                        name: displayName,
+                        lat: elLat,
+                        lng: elLng,
+                        area: areaParts.slice(0, 2).join(', ') || (userLocationLabel || 'Local Area'),
+                        phone: (tags.phone || tags['contact:phone'] || tags['contact:mobile'] || '').trim(),
+                        opening_hours: (tags.opening_hours || '').trim()
+                    });
+                });
+
+                parsed.sort((a, b) => computeHaversineKm(numLat, numLng, a.lat, a.lng) - computeHaversineKm(numLat, numLng, b.lat, b.lng));
+                osmPharmaciesCache = parsed.slice(0, 45);
+                if (badgeEl) badgeEl.textContent = String(osmPharmaciesCache.length);
+                renderOsmLayerMarkers();
+                return osmPharmaciesCache;
+            })
+            .catch(() => tryOverpass(idx + 1));
+    };
+
+    return tryOverpass(0);
+}
+
+function scheduleNearbyOsmDiscovery(lat, lng) {
+    if (osmFetchDebounceTimer) clearTimeout(osmFetchDebounceTimer);
+    osmFetchDebounceTimer = setTimeout(() => {
+        discoverNearbyOsmPharmacies(lat, lng);
+    }, 320);
+}
+
 function createUserLocationIcon() {
     return L.divIcon({
         className: 'custom-user-pin',
@@ -871,6 +1040,7 @@ function placeOrUpdateUserMarker(lat, lng, placeText = '', accuracyMeters = null
     }
 
     updateLocalEnvironmentBar(userLat, userLng, userLocationLabel || placeText);
+    scheduleNearbyOsmDiscovery(userLat, userLng);
 }
 
 function applyDetectedLocation(lat, lng, silent, accuracyMeters = null) {
@@ -1304,6 +1474,7 @@ function initSearchPage() {
     attachResilientTileLayer(searchMap);
 
     routeLayer = L.layerGroup().addTo(searchMap);
+    osmLayer = L.layerGroup().addTo(searchMap);
     markersLayer = L.layerGroup().addTo(searchMap);
     userLayer = L.layerGroup().addTo(searchMap);
 
@@ -1444,6 +1615,15 @@ function initSearchPage() {
     fetch('/api/shops')
         .then(r => (r.ok ? r.json() : []))
         .then(shops => {
+            if (Array.isArray(shops)) {
+                verifiedShopCoords = shops
+                    .map(s => ({ lat: parseFloat(s.lat), lng: parseFloat(s.lng) }))
+                    .filter(s => !Number.isNaN(s.lat) && !Number.isNaN(s.lng));
+            }
+            discoverNearbyOsmPharmacies(
+                userLat !== null ? userLat : defaultLat,
+                userLng !== null ? userLng : defaultLng
+            );
             if (lastSearchQuery || !Array.isArray(shops)) return;
             shops.forEach(shop => {
                 const lat = parseFloat(shop.lat);
@@ -1547,6 +1727,104 @@ function initSearchPage() {
     updateLocalEnvironmentBar(defaultLat, defaultLng, 'Patna');
 }
 
+function renderCatalogAndLocalOsmCards(resultsContainer, query, catalogItems, hasVerifiedResults) {
+    if (!resultsContainer) return;
+    const topCat = Array.isArray(catalogItems) && catalogItems.length > 0 ? catalogItems[0] : null;
+
+    if (topCat) {
+        const catCard = document.createElement('div');
+        catCard.className = 'catalog-ref-card mb-3';
+        const rxBadge = topCat.rx_required
+            ? `<span class="rx-pill-badge ms-1"><i class="bi bi-prescription2"></i>Rx Required</span>`
+            : '';
+        const genBadge = topCat.is_generic
+            ? `<span class="badge bg-success text-white rounded-pill ms-1">PMBJP Jan Aushadhi</span>`
+            : `<span class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill ms-1">Official Indian Catalog</span>`;
+        catCard.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start gap-2">
+                <div>
+                    <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                        <span class="fw-bold text-primary">${escapeHtml(topCat.med_name)}</span>
+                        ${genBadge}
+                        ${rxBadge}
+                    </div>
+                    <div class="small text-dark"><i class="bi bi-capsule me-1 text-primary"></i><strong>Salt:</strong> ${escapeHtml(topCat.salt_composition || 'Standard Composition')}</div>
+                    <small class="text-muted d-block">${escapeHtml(topCat.manufacturer || topCat.source || 'Indian Pharma')}${topCat.pack_size ? ` · ${escapeHtml(topCat.pack_size)}` : ''}</small>
+                </div>
+                <div class="text-end flex-shrink-0">
+                    <div class="fw-bold text-success fs-5">₹${Number(topCat.mrp || 0).toFixed(2)}</div>
+                    <small class="text-muted d-block" style="font-size: 0.7rem;">Ref. MRP</small>
+                    <div class="d-inline-flex gap-1 mt-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill py-0 px-2 cat-rx-btn" title="Add to Rx Matcher">+ Rx</button>
+                        <button type="button" class="btn btn-sm btn-outline-info rounded-pill py-0 px-2 cat-info-btn" title="Clinical Info"><i class="bi bi-info-circle-fill"></i></button>
+                    </div>
+                </div>
+            </div>
+        `;
+        catCard.querySelector('.cat-rx-btn')?.addEventListener('click', () => addMedicineToRxList(topCat.med_name));
+        catCard.querySelector('.cat-info-btn')?.addEventListener('click', () => {
+            openMedicineInfoModal(topCat.med_name, topCat.salt_composition || '', topCat.pack_size || '');
+        });
+        resultsContainer.prepend(catCard);
+    }
+
+    if (!Array.isArray(osmPharmaciesCache) || osmPharmaciesCache.length === 0) return;
+
+    const refLat = userLat !== null ? userLat : (searchMap ? searchMap.getCenter().lat : 25.5941);
+    const refLng = userLng !== null ? userLng : (searchMap ? searchMap.getCenter().lng : 85.1376);
+    const sortedLocal = [...osmPharmaciesCache]
+        .map(s => ({ ...s, distKm: computeHaversineKm(refLat, refLng, s.lat, s.lng) }))
+        .sort((a, b) => a.distKm - b.distKm)
+        .slice(0, hasVerifiedResults ? 4 : 6);
+
+    if (sortedLocal.length === 0) return;
+
+    const sectionWrap = document.createElement('div');
+    sectionWrap.className = 'mt-3 pt-3 border-top';
+    const refMedTitle = topCat ? topCat.med_name : query;
+    const refPriceNote = topCat && Number(topCat.mrp) > 0 ? ` · Ref. MRP ₹${Number(topCat.mrp).toFixed(2)}` : '';
+    sectionWrap.innerHTML = `
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-1 mb-2">
+            <div class="fw-bold small text-dark">
+                <i class="bi bi-geo-alt-fill text-warning me-1"></i>Nearby Local Pharmacies on Map
+            </div>
+            <span class="osm-unverified-badge">OpenStreetMap · Confirm Stock</span>
+        </div>
+        <small class="text-muted d-block mb-2" style="font-size: 0.76rem;">
+            Real neighborhood medical stores near you that may carry <strong>${escapeHtml(refMedTitle)}</strong>${escapeHtml(refPriceNote)}. Live counter stock is not yet linked — get directions, inquire, or claim if this is your shop.
+        </small>
+        <div class="d-flex flex-column gap-2 local-osm-cards-list"></div>
+    `;
+
+    const listHost = sectionWrap.querySelector('.local-osm-cards-list');
+    sortedLocal.forEach(localShop => {
+        const claimUrl = buildClaimStoreUrl(localShop);
+        const waUrl = localShop.phone ? buildWhatsAppInquiryUrl(localShop.phone, localShop.name, refMedTitle) : '';
+        const itemEl = document.createElement('div');
+        itemEl.className = 'local-osm-shop-card d-flex flex-wrap justify-content-between align-items-center gap-2';
+        itemEl.innerHTML = `
+            <div class="overflow-hidden">
+                <div class="fw-semibold text-dark small text-truncate"><i class="bi bi-shop-window text-warning me-1"></i>${escapeHtml(localShop.name)}</div>
+                <small class="text-muted d-block text-truncate">${escapeHtml(localShop.area)} · <strong>${localShop.distKm.toFixed(2)} km</strong>${localShop.opening_hours ? ` · ${escapeHtml(localShop.opening_hours)}` : ''}</small>
+            </div>
+            <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                ${waUrl ? `<a href="${escapeHtml(waUrl)}" target="_blank" rel="noopener" class="btn btn-sm whatsapp-inquiry-btn rounded-pill py-1 px-2" title="Ask on WhatsApp"><i class="bi bi-whatsapp"></i></a>` : ''}
+                ${localShop.phone ? `<a href="tel:${escapeHtml(localShop.phone)}" class="btn btn-sm btn-outline-success rounded-pill py-1 px-2" title="Call Store"><i class="bi bi-telephone"></i></a>` : ''}
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-1 px-2 local-osm-dir-btn" title="Show road route on map">
+                    <i class="bi bi-sign-turn-right-fill me-1"></i>${localShop.distKm.toFixed(1)} km
+                </button>
+                <a href="${escapeHtml(claimUrl)}" class="btn btn-sm btn-outline-warning text-dark rounded-pill py-1 px-2 fw-semibold" title="Claim store &amp; list live stock">Claim</a>
+            </div>
+        `;
+        itemEl.querySelector('.local-osm-dir-btn')?.addEventListener('click', () => {
+            showDirectionsOnMap(localShop.lat, localShop.lng, localShop.name);
+        });
+        listHost?.appendChild(itemEl);
+    });
+
+    resultsContainer.appendChild(sectionWrap);
+}
+
 function executeSearch(query, city, silentToast = false, keepUserView = false) {
     lastSearchQuery = query;
     hideMedicineAutocomplete();
@@ -1568,31 +1846,41 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
     if (inStockOnly) url += `&in_stock=1`;
     if (openNowOnly) url += `&open_now=1`;
 
-    fetch(url)
-        .then(response => {
+    const catalogPromise = fetch(`/api/catalog?q=${encodeURIComponent(query)}&limit=3`)
+        .then(r => (r.ok ? r.json() : []))
+        .catch(() => []);
+
+    Promise.all([
+        fetch(url).then(response => {
             if (!response.ok) {
                 throw new Error(`Server returned HTTP ${response.status}`);
             }
             return response.json();
-        })
-        .then(data => {
+        }),
+        catalogPromise
+    ])
+        .then(([data, catalogItems]) => {
             markersLayer.clearLayers();
             resultsContainer.innerHTML = '';
 
             const results = Array.isArray(data) ? data : (data.results || []);
 
             if (results.length === 0) {
-                if (resultsCount) resultsCount.textContent = '0 found';
+                if (resultsCount) resultsCount.textContent = '0 verified';
                 hideSubstitutesPanel();
                 resultsContainer.innerHTML = `
-                    <div class="text-center py-5 text-muted">
-                        <i class="bi bi-emoji-frown fs-1 text-secondary opacity-50"></i>
-                        <p class="mt-2 fw-semibold">No pharmacies found matching "${escapeHtml(query)}".</p>
-                        <small>Try searching generic active ingredients (e.g. Paracetamol) or clear the location / open-now filter.</small>
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-shop fs-2 text-secondary opacity-50"></i>
+                        <p class="mt-2 mb-1 fw-semibold">No verified partner stores currently list live stock for "${escapeHtml(query)}".</p>
+                        <small>See official catalog MRP, generic substitutes, and real nearby local pharmacies on the map below.</small>
                         <div id="rxnorm-suggestions-box" class="mt-3"></div>
                     </div>
                 `;
-                fetchAndRenderSubstitutes(query, []);
+                renderCatalogAndLocalOsmCards(resultsContainer, query, catalogItems, false);
+                const fallbackSaltHits = Array.isArray(catalogItems) && catalogItems.length > 0
+                    ? [{ med_name: catalogItems[0].med_name, salt_composition: catalogItems[0].salt_composition, price: catalogItems[0].mrp }]
+                    : [];
+                fetchAndRenderSubstitutes(query, fallbackSaltHits);
                 fetchRxNormSpellingSuggestions(query).then(suggestions => {
                     const box = document.getElementById('rxnorm-suggestions-box');
                     if (!box || !Array.isArray(suggestions) || suggestions.length === 0) return;
@@ -1607,11 +1895,13 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                         });
                     });
                 });
-                if (!silentToast) showToast('No matching inventory found', 'error');
+                if (!silentToast && (!Array.isArray(catalogItems) || catalogItems.length === 0)) {
+                    showToast('No matching partner inventory found — showing nearby local shops', 'info');
+                }
                 return;
             }
 
-            if (resultsCount) resultsCount.textContent = `${results.length} found`;
+            if (resultsCount) resultsCount.textContent = `${results.length} verified`;
             fetchAndRenderSubstitutes(query, results);
 
             const bounds = [];
@@ -1792,11 +2082,13 @@ function executeSearch(query, city, silentToast = false, keepUserView = false) {
                 }
             });
 
+            renderCatalogAndLocalOsmCards(resultsContainer, query, catalogItems, true);
+
             if (bounds.length > 0 && !keepUserView && !activeRouteTarget) {
                 searchMap.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
             }
 
-            if (!silentToast) showToast(`Found ${results.length} available listing${results.length === 1 ? '' : 's'}`);
+            if (!silentToast) showToast(`Found ${results.length} verified listing${results.length === 1 ? '' : 's'}`);
         })
         .catch(err => {
             console.error('Search fetch error:', err);
@@ -2202,25 +2494,43 @@ function autoFillSaltFromRxNorm() {
         return;
     }
 
-    const mapped = BRAND_TO_GENERIC_MAP[medName.toLowerCase()];
-    if (mapped) {
-        const displaySalt = mapped === 'Acetaminophen' ? 'Paracetamol (Acetaminophen)' : mapped;
-        saltInput.value = displaySalt;
-        showToast(`Active salt set: ${displaySalt}`);
-        return;
-    }
+    fetch(`/api/catalog?q=${encodeURIComponent(medName)}&limit=1`)
+        .then(r => (r.ok ? r.json() : []))
+        .then(catRows => {
+            if (Array.isArray(catRows) && catRows.length > 0 && catRows[0].salt_composition) {
+                const hit = catRows[0];
+                saltInput.value = hit.salt_composition;
+                const dosageEl = document.getElementById('add-dosage-input');
+                const priceEl = document.getElementById('add-price-input');
+                const rxEl = document.getElementById('add-rx-required');
+                if (dosageEl && !dosageEl.value && hit.pack_size) dosageEl.value = hit.pack_size;
+                if (priceEl && !priceEl.value && Number(hit.mrp) > 0) priceEl.value = Number(hit.mrp).toFixed(2);
+                if (rxEl && hit.rx_required) rxEl.checked = true;
+                showToast(`Matched official catalog: ${hit.salt_composition}`);
+                return;
+            }
 
-    const lookup = normalizeLookupTerm(medName, '');
-    showToast('Querying NIH RxNorm for active ingredient...', 'info');
-    fetchRxNormData(lookup).then(rxData => {
-        if (rxData && rxData.ingredient) {
-            const formatted = rxData.ingredient.charAt(0).toUpperCase() + rxData.ingredient.slice(1);
-            saltInput.value = formatted;
-            showToast(`RxNorm detected salt: ${formatted}`);
-        } else {
-            showToast('Could not auto-detect salt — please enter the composition manually', 'error');
-        }
-    });
+            const mapped = BRAND_TO_GENERIC_MAP[medName.toLowerCase()];
+            if (mapped) {
+                const displaySalt = mapped === 'Acetaminophen' ? 'Paracetamol (Acetaminophen)' : mapped;
+                saltInput.value = displaySalt;
+                showToast(`Active salt set: ${displaySalt}`);
+                return;
+            }
+
+            const lookup = normalizeLookupTerm(medName, '');
+            showToast('Querying NIH RxNorm for active ingredient...', 'info');
+            fetchRxNormData(lookup).then(rxData => {
+                if (rxData && rxData.ingredient) {
+                    const formatted = rxData.ingredient.charAt(0).toUpperCase() + rxData.ingredient.slice(1);
+                    saltInput.value = formatted;
+                    showToast(`RxNorm detected salt: ${formatted}`);
+                } else {
+                    showToast('Could not auto-detect salt — please enter the composition manually', 'error');
+                }
+            });
+        })
+        .catch(() => {});
 }
 
 // --- 10. AUTOCOMPLETE, GENERIC SUBSTITUTES, MY HOLDS, RX MATCHER, SAFETY & PWA ---
@@ -2293,15 +2603,21 @@ function initMedicineAutocomplete() {
                         btn.type = 'button';
                         btn.className = 'location-suggestion-item d-flex justify-content-between align-items-center w-100 text-start';
                         const rxTag = sug.rx_required ? `<span class="rx-pill-badge ms-1">Rx</span>` : '';
-                        const priceTag = sug.min_price > 0 ? `From ₹${Number(sug.min_price).toFixed(2)}` : '';
+                        const inStockCount = Number(sug.in_stock_stores || 0);
+                        const priceTag = sug.min_price > 0
+                            ? (inStockCount > 0 ? `From ₹${Number(sug.min_price).toFixed(2)}` : `MRP ₹${Number(sug.min_price).toFixed(2)}`)
+                            : '';
+                        const storeSubtext = inStockCount > 0
+                            ? `${inStockCount} verified store${inStockCount === 1 ? '' : 's'}`
+                            : (sug.is_generic ? 'Jan Aushadhi Catalog' : 'Official Catalog');
                         btn.innerHTML = `
                             <div class="overflow-hidden me-2">
                                 <div class="fw-bold text-primary small text-truncate">${escapeHtml(sug.med_name)}${rxTag}</div>
-                                <small class="text-muted text-truncate d-block">${escapeHtml(sug.salt_composition || 'Verified Pharmacy Stock')}</small>
+                                <small class="text-muted text-truncate d-block">${escapeHtml(sug.salt_composition || sug.manufacturer || 'Official Medicine Catalog')}</small>
                             </div>
                             <div class="text-end flex-shrink-0">
                                 <div class="small fw-bold text-success">${escapeHtml(priceTag)}</div>
-                                <small class="text-muted">${Number(sug.in_stock_stores || 0)} store${Number(sug.in_stock_stores || 0) === 1 ? '' : 's'}</small>
+                                <small class="${inStockCount > 0 ? 'text-success fw-semibold' : 'text-muted'}">${escapeHtml(storeSubtext)}</small>
                             </div>
                         `;
                         btn.addEventListener('click', () => {
@@ -2360,12 +2676,22 @@ function fetchAndRenderSubstitutes(query, primaryResults) {
                 saltBadge.textContent = data.salt;
             }
             listEl.innerHTML = '';
-            subs.slice(0, 4).forEach(sub => {
+            subs.slice(0, 5).forEach(sub => {
+                const isCatalogRef = Boolean(sub.is_catalog_reference) || sub.med_id === null || sub.med_id === undefined;
                 const savingsBadge = sub.savings_pct > 0
                     ? `<span class="savings-pill"><i class="bi bi-arrow-down-short"></i>Save ${sub.savings_pct}% (₹${Number(sub.savings_amount).toFixed(2)})</span>`
                     : `<span class="badge bg-success-subtle text-success border border-success rounded-pill">Same Active Salt</span>`;
                 const rxBadge = sub.rx_required ? `<span class="rx-pill-badge ms-1">Rx</span>` : '';
                 const distText = (sub.distance_km !== null && sub.distance_km !== undefined) ? ` · ${sub.distance_km} km` : '';
+                const subLine = isCatalogRef
+                    ? `<i class="bi bi-award text-success me-1"></i>${escapeHtml(sub.shop_name || 'PMBJP Jan Aushadhi / Catalog')} · ${escapeHtml(sub.dosage || 'Reference MRP')}`
+                    : `<i class="bi bi-shop me-1"></i>${escapeHtml(sub.shop_name)} (${escapeHtml(sub.city || 'Verified')})${escapeHtml(distText)} · ${sub.available_quantity} in stock`;
+                const actionBtns = isCatalogRef
+                    ? `<button type="button" class="btn btn-sm btn-outline-success rounded-pill py-0 px-2 fw-semibold sub-check-btn">Check Nearby</button>`
+                    : `
+                        ${sub.lat && sub.lng ? `<button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 sub-dir-btn" title="Directions"><i class="bi bi-sign-turn-right-fill"></i></button>` : ''}
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill py-0 px-2 fw-semibold sub-hold-btn">Hold</button>
+                    `;
                 const card = document.createElement('div');
                 card.className = 'substitute-card d-flex justify-content-between align-items-center gap-2';
                 card.innerHTML = `
@@ -2375,16 +2701,11 @@ function fetchAndRenderSubstitutes(query, primaryResults) {
                             ${rxBadge}
                             ${savingsBadge}
                         </div>
-                        <small class="text-muted d-block text-truncate">
-                            <i class="bi bi-shop me-1"></i>${escapeHtml(sub.shop_name)} (${escapeHtml(sub.city || 'Verified')})${escapeHtml(distText)} · ${sub.available_quantity} in stock
-                        </small>
+                        <small class="text-muted d-block text-truncate">${subLine}</small>
                     </div>
                     <div class="text-end flex-shrink-0">
                         <div class="fw-bold text-success">₹${Number(sub.price || 0).toFixed(2)}</div>
-                        <div class="d-inline-flex gap-1 mt-1">
-                            ${sub.lat && sub.lng ? `<button type="button" class="btn btn-sm btn-outline-secondary rounded-pill py-0 px-2 sub-dir-btn" title="Directions"><i class="bi bi-sign-turn-right-fill"></i></button>` : ''}
-                            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill py-0 px-2 fw-semibold sub-hold-btn">Hold</button>
-                        </div>
+                        <div class="d-inline-flex gap-1 mt-1">${actionBtns}</div>
                     </div>
                 `;
                 card.querySelector('.sub-dir-btn')?.addEventListener('click', () => {
@@ -2392,6 +2713,9 @@ function fetchAndRenderSubstitutes(query, primaryResults) {
                 });
                 card.querySelector('.sub-hold-btn')?.addEventListener('click', () => {
                     requestHold(sub.med_id, sub.med_name, sub.available_quantity, sub.shop_name, sub.price, Boolean(sub.rx_required));
+                });
+                card.querySelector('.sub-check-btn')?.addEventListener('click', () => {
+                    quickSearch(sub.med_name);
                 });
                 listEl.appendChild(card);
             });
@@ -2770,6 +3094,74 @@ function registerPwaServiceWorker() {
     }
 }
 
+function initDashboardCatalogAutocomplete() {
+    const input = document.getElementById('add-med-name-input');
+    const menu = document.getElementById('dashboard-catalog-suggestions');
+    if (!input || !menu) return;
+
+    let timer = null;
+    const hideMenu = () => {
+        menu.classList.add('d-none');
+        menu.innerHTML = '';
+    };
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim();
+        if (timer) clearTimeout(timer);
+        if (q.length < 2) {
+            hideMenu();
+            return;
+        }
+        timer = setTimeout(() => {
+            fetch(`/api/catalog?q=${encodeURIComponent(q)}&limit=8`)
+                .then(r => (r.ok ? r.json() : []))
+                .then(items => {
+                    if (!Array.isArray(items) || items.length === 0 || document.activeElement !== input) {
+                        hideMenu();
+                        return;
+                    }
+                    menu.innerHTML = '';
+                    items.forEach(item => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'location-suggestion-item d-flex justify-content-between align-items-center w-100 text-start';
+                        btn.innerHTML = `
+                            <div class="overflow-hidden me-2">
+                                <div class="fw-bold text-primary small text-truncate">${escapeHtml(item.med_name)}</div>
+                                <small class="text-muted text-truncate d-block">${escapeHtml(item.salt_composition || item.manufacturer || '')}</small>
+                            </div>
+                            <div class="text-end flex-shrink-0">
+                                <div class="small fw-bold text-success">₹${Number(item.mrp || 0).toFixed(2)}</div>
+                                <small class="text-muted">${item.is_generic ? 'Jan Aushadhi' : 'Branded'}</small>
+                            </div>
+                        `;
+                        btn.addEventListener('mousedown', (e) => {
+                            e.preventDefault();
+                            input.value = item.med_name;
+                            const saltEl = document.getElementById('add-salt-input');
+                            const dosageEl = document.getElementById('add-dosage-input');
+                            const priceEl = document.getElementById('add-price-input');
+                            const rxEl = document.getElementById('add-rx-required');
+                            if (saltEl) saltEl.value = item.salt_composition || '';
+                            if (dosageEl) dosageEl.value = item.pack_size || '';
+                            if (priceEl && Number(item.mrp) > 0) priceEl.value = Number(item.mrp).toFixed(2);
+                            if (rxEl) rxEl.checked = Boolean(item.rx_required);
+                            hideMenu();
+                            showToast(`Auto-filled ${item.med_name} (₹${Number(item.mrp || 0).toFixed(2)})`);
+                        });
+                        menu.appendChild(btn);
+                    });
+                    menu.classList.remove('d-none');
+                })
+                .catch(() => hideMenu());
+        }, 160);
+    });
+
+    document.addEventListener('click', (ev) => {
+        if (!menu.contains(ev.target) && ev.target !== input) hideMenu();
+    });
+}
+
 // Global Initialization
 let mediFinderBooted = false;
 function bootMediFinder() {
@@ -2777,6 +3169,7 @@ function bootMediFinder() {
     mediFinderBooted = true;
     initTheme();
     initSearchPage();
+    initDashboardCatalogAutocomplete();
     registerPwaServiceWorker();
 }
 

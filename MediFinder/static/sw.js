@@ -1,4 +1,4 @@
-const CACHE_NAME = 'medfinder-shell-v20261123-12';
+const CACHE_NAME = 'medfinder-shell-v20261123-14';
 const SHELL_ASSETS = [
   '/',
   '/manifest.json',
